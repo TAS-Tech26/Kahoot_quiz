@@ -37,6 +37,10 @@ class Quiz(models.Model):
         self.save(update_fields = ['compiled_data', 'is_published'])
 
         return payload
+    
+    def __str__(self):
+
+        return f"Quiz {self.id}"
 
 
 class Question(models.Model):
@@ -46,12 +50,20 @@ class Question(models.Model):
     time_limit = models.IntegerField(default = 10)
     order = models.IntegerField(default = 0)
 
+    def __str__(self):
+
+        return self.text[:50] # Shows the 1st 50 chars of the Q
+
 
 class Choice(models.Model):
 
     question = models.ForeignKey(Question, related_name = 'choices', on_delete = models.CASCADE)
     text = models.CharField(max_length = 255)
     is_correct = models.BooleanField(default = False)
+
+    def __str__(self):
+
+        return f"{self.text} (Correct)" if self.is_correct else self.text
 
 
 class GameSession(models.Model):

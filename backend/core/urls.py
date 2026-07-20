@@ -1,3 +1,6 @@
+# urls.py
+
+
 """
 URL configuration for core project.
 
@@ -15,8 +18,13 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
+
+from game.views import create_game_session
+
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    path('api/game/create/', create_game_session, name = 'create_game_session'),
 ]

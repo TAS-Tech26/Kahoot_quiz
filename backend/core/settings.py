@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from dotenv import load_dotenv
 from pathlib import Path
 
 import dj_database_url, os
@@ -18,11 +19,14 @@ import dj_database_url, os
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+load_dotenv()
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY')
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
@@ -84,12 +88,7 @@ DATABASES = {
 }
 
 CHANNEL_LAYERS = {
-    'default' : {
-        'BACKEND' : 'channels_redis.core.RedisChannelLayer',
-        'CONFIG' : {
-            'hosts' : [os.environ.get('REDIS_URL')]
-        }
-    }
+    'default' : {'BACKEND' : 'channels_redis.core.RedisChannelLayer', 'CONFIG' : {'hosts' : [{'address' : os.environ.get('REDIS_URL'), 'socket_timeout' : None}]}}
 }
 
 # Password validation
