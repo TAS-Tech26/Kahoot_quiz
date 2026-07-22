@@ -33,6 +33,18 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
+        if hasattr(self, 'player_id'):
+            active_key = f'game:{self.pin}:active_players'
+
+            await redis_client.srem(active_key, self.player_id)
+
+            total_players = await redis_client.scard(active_key)
+
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type' : 'broadcast_event', 'event_type' : 'player_left', 'data' : {'total_players' : total_players}}
+            )
+
     async def receive_json(self, content):
         action = content.get('action')
         is_host = content.get('role') == 'host'
@@ -85,6 +97,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         provided_id = data.get('player_id')
 
         players_key = f'game:{self.pin}:players'
+        active_key = f'game:{self.pin}:active_players'
 
         # To re-connect the player if they've disconnected (A new player ID would be generated if the player got disconnected but their data is already stored in Redis.
         # connecting to the old player ID. That means if they got disconnected, they'd lose all the game data, including their score, leaderboard ranking etc. So we
@@ -96,16 +109,34 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
                 # Bind the existing identity to the new socket instance
                 self.player_id = provided_id
 
+                await redis_client.sadd(active_key, provided_id) # Re-add to active connections
+
+                total_players = await redis_client.scard(active_key)
+
                 await self.send_json({'event_type' : 'rejoin_success', 'player_id' : provided_id, 'name' : existing_name})
+
+                await self.channel_layer.group_send(
+                    self.room_group_name,
+                    {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : existing_name, 'total_players' : total_players}}
+                )
 
                 return
 
         # Data validation (To prevent Postgres NULL crashes)
         full_name = data.get('full_name')
         contact_info = data.get('contact_info')
+        school_name = data.get('school_name')
+        grade_level_raw = data.get('grade_level')
 
-        if not full_name or contact_info:
+        if not full_name or not contact_info or not school_name or grade_level_raw is None or str(grade_level_raw).strip() == '':
             await self.send_json({'event_type' : 'error', 'message' : "Missing required fields for new player registration."})
+
+            return
+
+        try:
+            grade_level = int(grade_level_raw)
+        except (ValueError, TypeError):
+            await self.send_json({'event_type' : 'error', 'message' : "Grade level must be a valid number."})
 
             return
 
@@ -113,16 +144,25 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
         self.player_id = new_player_id
 
+        total_players = await redis_client.hlen(players_key)
+
         await redis_client.hset(players_key, new_player_id, full_name) # Redis Hash: Map UUID to name
         await redis_client.zadd(f'game:{self.pin}:scores', {new_player_id : 0}, nx = True) # Redis Sorted Set: Add to leaderboard with 0 points (nx = True guarantees we
                                                                                             # never overwrite an existing score to 0)
-        
-        await self.create_player_result(new_player_id, full_name, data.get('contact_info'), data.get('school_name'), data.get('grade_level'))
+        await redis_client.sadd(active_key, new_player_id)
+
+        total_players = await redis_client.scard(active_key)
+
+        await self.create_player_result(new_player_id, full_name, contact_info, school_name, grade_level)
         await self.send_json({'event_type' : 'join_success', 'player_id' : new_player_id})
-        await self.channel_layer.group_send(self.room_group_name, {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : full_name}})
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : full_name, 'total_players' : total_players}}
+        )
 
     async def broadcast_event(self, event):
         """Fires the actual data through the WebSocket to the React frontend"""
+
         await self.send_json({'event' : event['event_type'], 'data' : event.get('data', {})})
 
     async def handle_submit_answer(self, data):
@@ -154,7 +194,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         time_taken = time.time() - start_time # Check how long the user took to ans the Q
         
         quiz_data = json.loads(await redis_client.get(f'game:{self.pin}:quiz')) # Data validation, read from Redis
-
         current_question = next((q for q in quiz_data['questions'] if q['id'] == question_id), None)
 
         if not current_question:
@@ -173,11 +212,16 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
             await redis_client.zincrby(f'game:{self.pin}:scores', points_earned, self.player_id) # Automatically increment score in Redis Sorted Set.
 
+        total_answers = await redis_client.scard(answered_key)
+
         # Send priv data only to the person who answered
         await self.send_json({'event_type' : 'answer_result', 'data' : {'is_correct' : is_correct, 'points_earned' : points_earned}})
 
         # Send a msg to the entire room that the frontend can update the ans submitted counter.
-        await self.channel_layer.group_send(self.room_group_name, {'type' : 'broadcast_event', 'event_type' : 'answer_registered'})
+        await self.channel_layer.group_send(
+            self.room_group_name,
+            {'type' : 'broadcast_event', 'event_type' : 'answer_registered', 'data' : {'total_answers' : total_answers}}
+        )
 
     async def handle_next_question(self):
         state_key = f'game:{self.pin}:state'

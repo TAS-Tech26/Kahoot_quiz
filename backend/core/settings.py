@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -90,6 +91,10 @@ DATABASES = {
 CHANNEL_LAYERS = {
     'default' : {'BACKEND' : 'channels_redis.core.RedisChannelLayer', 'CONFIG' : {'hosts' : [{'address' : os.environ.get('REDIS_URL'), 'socket_timeout' : None}]}}
 }
+
+REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES' : ('rest_framework_simplejwt.authentication.JWTAuthentication')}
+
+SIMPLE_JWT = {'ACCESS_TOKEN_LIFETIME' : timedelta(minutes = 60), 'REFRESH_TOKEN_LIFETIME' : timedelta(days = 1), 'AUTH_HEADER_TYPES' : ('Bearer',)}
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators

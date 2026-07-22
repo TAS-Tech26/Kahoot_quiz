@@ -82,5 +82,5 @@ class PlayerResult(models.Model):
     full_name = models.CharField(max_length = 255)
     contact_info = models.CharField(max_length = 255)
     total_score = models.IntegerField(default = 0)
-    school_name = models.CharField(max_length = 255, null = True, blank = True)
-    grade_level = models.IntegerField(null = True, blank = True)
+    school_name = models.CharField(max_length = 255)
+    grade_level = models.IntegerField()

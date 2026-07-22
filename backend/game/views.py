@@ -50,3 +50,20 @@ def create_game_session(request):
     session = GameSession.objects.create(quiz = quiz, pin = pin)
 
     return Response({'message' : "Session created successfully.", 'pin' : session.pin, 'quiz_id' : quiz.id}, status = 201)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def list_host_quizzes(request):
+    """Allows the host to fetch a list of all available quizzes."""
+
+    quizzes = Quiz.objects.filter(author = request.user).values('id', 'title', 'is_published')
+
+    return Response(list(quizzes))
+
+@api_view(['GET'])
+def verify_pin(request, pin):
+    if GameSession.objects.filter(pin = pin).exists():
+
+        return Response({'valid' : True})
+
+    return Response({'error' : "Invalid PIN"}, status = 404)

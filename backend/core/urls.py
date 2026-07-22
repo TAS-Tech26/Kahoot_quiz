@@ -20,11 +20,18 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
-from game.views import create_game_session
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
+from game.views import create_game_session, list_host_quizzes, verify_pin
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    path('api/game/create/', create_game_session, name = 'create_game_session'),
+    path ('api/token/', TokenObtainPairView.as_view(), name = 'token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name = 'token_refresh'),
+
+    path('api/game/create/', create_game_session, name = 'create_session'),
+    path('api/game/verify/<str:pin>', verify_pin, name = 'verify_pin'),
+    path('api/quizzes/', list_host_quizzes, name = 'list_quizzes')
 ]
