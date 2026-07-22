@@ -1,0 +1,51 @@
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Space+Grotesk:wght@400;700&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+    /* Raw colors */
+    --color-raw-sand : #e5e1d8;
+    --color-concrete : #d9d9d9;
+    --color-pitch-black : #0b0b0b;
+    --color-industrial-blue : #1a365d;
+    --color-void-white : #f8f9fa;
+    --color-brutal-green : #00e676;
+    --color-brutal-red : #ff3366;
+
+    --color-bg-base : var(--color-raw-sand);
+
+    /* Typography */
+    --color-ink : var(--color-pitch-black);
+    --color-text-inverted : var(--color-raw-sand);
+
+    --color-card-dark : var(--color-industrial-blue);
+
+    --color-btn-neutral : var(--color-void-white);
+    --color-btn-correct : var(--color-brutal-green);
+    --color-btn-wrong : var(--color-brutal-red);
+
+    /* Shadows */
+    --shadow-brutal-sm : 4px 4px 0px 0px var(--color-pitch-black);
+    --shadow-brutal-md : 6px 6px 0px 0px var(--color-pitch-black);
+    --shadow-brutal-lg : 8px 8px 0px 0px var(--color-pitch-black);
+
+    /* Fonts */
+    --font-sans : "Space Grotesk", sans-serif;
+    --font-mono : "IBM Plex Mono", monospace;
+
+    /* Radius */
+    --radius-brutal : 0px;
+}
+
+@layer base {
+    body {
+        @apply bg-bg-base text-ink font-sans antialiased;
+    }
+
+    /* Ensures all the outlines are sharp & not fuzzy */
+    *:focus-visible {
+        outline : 2px solid var(--color-pitch-black);
+        outline-offset : 2px;
+    }
+}
