@@ -2,7 +2,7 @@
 
 
 import {createContext, useContext, useEffect, useRef, useState} from 'react'
-import {useNavigate} from 'react-router-dom'
+import {useLocation, useNavigate} from 'react-router-dom'
 
 
 const WebSocketContext = createContext(null)
@@ -16,6 +16,7 @@ export const WebSocketProvider = ({pin, role, children}) => {
     const socketRef = useRef(null) // Prevents multiple sockets (keeps the socket value persisting) from spawning during re-renders
 
     const navigate = useNavigate()
+    const location = useLocation() // Read the data passed from JoinScreen
 
     useEffect(() => {
         if (!pin) return
@@ -46,18 +47,16 @@ export const WebSocketProvider = ({pin, role, children}) => {
 
             if (role === 'player') {
                 const savedPlayerId = localStorage.getItem('player_id')
-                const pendingRegistration = sessionStorage.getItem('pendingRegistration')
+                const registrationData = location.state() // Fetched from router
 
                 if (savedPlayerId) {
                     // Recover player ID if disconnected
                     ws.send(JSON.stringify({action : 'player_join', role : 'player', data : {player_id : savedPlayerId}}))
-                } else if (pendingRegistration) {
+                } else if (registrationData) {
                     // New player registration
-                    const parsedData = JSON.parse(pendingRegistration)
+                    ws.send(JSON.stringify({action : 'player_join', role : 'player', data : registrationData}))
 
-                    ws.send(JSON.stringify({action : 'player_join', role : 'player', data : parsedData}))
-
-                    sessionStorage.removeItem('pendingRegistration')
+                    window.history.replaceState({}, document.title)
                 } else {
                     console.error("Connection rejected: No player registration data found.")
 
@@ -76,18 +75,16 @@ export const WebSocketProvider = ({pin, role, children}) => {
             setLastMessage(parsedData)
 
             // Auto-save player_id to localStorage when backend sends 1
-            if (parsedData.event === 'join_success' || parsedData.event === 'rejoin_success') localStorage.setItem('player_id', parsedData.data.player_id)
+            if (['join_success', 'rejoin_success'].includes(parsedData.event)) localStorage.setItem('player_id', parsedData.data.player_id)
         }
 
         ws.onclose = () => setIsConnected(false)
 
-        setSocket(ws)
-
         return () => ws.close()
-    }, [pin, navigate, role])
+    }, [pin, navigate, role, location.state])
 
     const sendMessage = (action, role, data = {}) => {
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({action, role, data}))
+        if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({action, role, data}))
     }
 
     return (

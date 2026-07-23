@@ -3,15 +3,13 @@
 
 import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
-import GameRoom from './pages/GameRoom'
-import HostControlPanel from './pages/HostControlPanel'
-import SessionCreator from './pages/SessionCreator'
 import HostLogin from './pages/HostLogin'
 import JoinScreen from './pages/JoinScreen'
 import NotFound from './pages/NotFound'
+import SessionCreator from './pages/SessionCreator'
 
-import HostProtectedRoute from './wrappers/HostProtectedRoute'
 import HostGameWrapper from './wrappers/HostGameWrapper'
+import HostProtectedRoute from './wrappers/HostProtectedRoute'
 import PlayerGameWrapper from './wrappers/PlayerGameWrapper'
 
 

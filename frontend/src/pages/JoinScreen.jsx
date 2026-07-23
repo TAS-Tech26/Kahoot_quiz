@@ -36,17 +36,14 @@ export default function JoinScreen() {
         
         }
 
-        sessionStorage.setItem(
-            'pendingRegistration',
-            JSON.stringify({
+        navigate(`/game/${formData.pin}`, {
+            state : {
                 full_name : formData.fullName.trim(),
                 contact_info : formData.contactInfo.trim(),
                 school_name : formData.schoolName.trim(),
                 grade_level : formData.gradeLevel.trim()
-            })
-        )
-
-        navigate(`/game/${formData.pin}`)
+            }
+        })
     }
 
     return (
