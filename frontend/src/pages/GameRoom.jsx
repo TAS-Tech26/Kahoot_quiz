@@ -1,7 +1,7 @@
 // GameRoom.jsx
 
 
-import {useWebSocket} from '../WebSocketContext'
+import {useWebSocket} from '../context/WebSocketContext'
 
 import {useGameState} from '../hooks/useGameState'
 

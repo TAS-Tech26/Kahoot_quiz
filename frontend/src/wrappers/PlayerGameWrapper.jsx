@@ -3,7 +3,7 @@
 
 import {useParams, Navigate} from 'react-router-dom'
 
-import {WebSocketProvider} from '../WebSocketContext'
+import {WebSocketProvider} from '../context/WebSocketContext'
 
 import GameRoom from '../pages/GameRoom'
 

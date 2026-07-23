@@ -4,7 +4,7 @@
 import {useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 
-import {createGameSession} from '../api'
+import {createGameSession} from '../api/api'
 
 
 export default function SessionCreator() {

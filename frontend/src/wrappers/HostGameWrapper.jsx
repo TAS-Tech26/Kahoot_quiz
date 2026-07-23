@@ -3,9 +3,9 @@
 
 import {useParams} from 'react-router-dom'
 
-import {WebSocketProvider} from '../WebSocketContext'
+import {WebSocketProvider} from '../context/WebSocketContext'
 
-import HostControlPanel from './pages/HostControlPanel'
+import HostControlPanel from '../pages/HostControlPanel'
 
 
 export default function HostGameWrapper() {
