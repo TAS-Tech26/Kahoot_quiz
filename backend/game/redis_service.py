@@ -19,6 +19,12 @@ class GameRedisManager:
         self.active_key = f'game:{self.pin}:active_players'
         self.scores_key = f'game:{self.pin}:scores'
         self.quiz_key = f'game:{self.pin}:quiz'
+        self.identities_key = f'game:{self.pin}:identities'
+
+    async def get_player_by_contact(self, contact_info):
+        """Checks if the email/phone already belongs to a registered UUID"""
+
+        return await redis_client.hget(self.identities_key, contact_info)
 
     async def get_state(self):
 
@@ -42,8 +48,9 @@ class GameRedisManager:
             mapping = {'current_question_index' : next_index, 'current_question_id' : next_question_id, 'start_time' : time.time()}
         )
 
-    async def register_new_player(self, player_id, full_name):
+    async def register_new_player(self, player_id, full_name, contact_info):
         await redis_client.hset(self.players_key, player_id, full_name)
+        await redis_client.hset(self.identities_key, contact_info, player_id)
         await redis_client.zadd(self.scores_key, {player_id : 0}, nx = True)
         await redis_client.sadd(self.active_key, player_id)
 

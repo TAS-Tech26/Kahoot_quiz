@@ -27,7 +27,7 @@ export const HostLobby = ({playersCount, onStart}) => (
     
 )
 
-export const HostActiveQuestion = ({question, answersSubmitted, totalPlayers, onReveal}) => (
+export const HostActiveQuestion = ({question, answersSubmitted, totalPlayers, onShowLeaderboard}) => (
 
     <div className = "flex-1 flex flex-col w-full max-w-5xl mx-auto space-y-8">
         <div className = "bg-btn-neutral border-4 border-ink shadow-brutal-lg p-8 text-center">
@@ -47,25 +47,48 @@ export const HostActiveQuestion = ({question, answersSubmitted, totalPlayers, on
         </div>
 
         <button
-            onClick = {onReveal}
+            onClick = {onShowLeaderboard}
             className = "w-full bg-btn-wrong text-text-inverted font-bold text-2xl py-4 border-4 border-ink shadow-brutal-md hover:translate-y-1 hover:shadow-brutal-sm active:translate-y-1.5 active:shadow-none transition-all uppercase"
         >
-            Skip & Show Answer
+            End Question & Show Standings
         </button>
     </div>
 
 )
 
-export const HostResult = ({onNext}) => (
+export const HostResult = ({leaderboard, onNext}) => (
 
     <div className = "flex-1 flex flex-col items-center justify-center w-full max-w-4xl mx-auto space-y-8">
         <div className = "bg-card-dark border-4 border-ink shadow-brutal-lg p-12 text-center w-full">
-            <h2 className = "text-text-inverted text-5xl font-bold uppercase mb-4">
+            <h2 className = "text-text-inverted text-5xl font-bold uppercase mb-4 border-b-4 border-ink pb-4">
                 Time's Up!
             </h2>
 
+            <div className = "w-full bg-btn-neutral border-4 border-ink p-6 shadow-brutal-lg text-ink text-left mb-8 mt-8">
+                {leaderboard?.length > 0 ? (
+                    leaderboard.map((player) => (
+                        <div
+                            key = {player.player_id}
+                            className = "flex justify-between items-center border-b-4 border-ink py-4 last:border-b-0 font-mono"
+                        >
+                            <span className = "text-2xl font-bold truncate pr-4">
+                                #{player.rank} {player.name}
+                            </span>
+
+                            <span className = "text-2xl font-bold whitespace-nowrap">
+                                {player.score} PTS
+                            </span>
+                        </div>
+                    ))
+                ) : (
+                    <div className = "text-center text-ink/70 font-bold uppercase py-4">
+                        No data available.
+                    </div>
+                )}
+            </div>
+
             <p className = "text-text-inverted/70 text-xl uppercase tracking-widest mb-8">
-                Answers revealed on player screens.
+                Individual points revealed on player screens.
             </p>
         </div>
 

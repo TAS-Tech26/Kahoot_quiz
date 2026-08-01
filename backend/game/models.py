@@ -10,11 +10,12 @@ import uuid
 
 class Quiz(models.Model):
 
-    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE, limit_choices_to = {'is_staff' : True})
     title = models.CharField(max_length = 255)
     is_published = models.BooleanField(default = False)
     compiled_data = JSONField(null = True, blank = True) # Stores the entire quiz (Qs & choices) in a single block.
     created_at = models.DateTimeField(auto_now_add = True)
+
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE, limit_choices_to = {'is_staff' : True})
 
     def compile_for_redis(self):
         """
@@ -45,10 +46,11 @@ class Quiz(models.Model):
 
 class Question(models.Model):
 
-    quiz = models.ForeignKey(Quiz, related_name = 'questions', on_delete = models.CASCADE)
     text = models.CharField(max_length = 500)
     time_limit = models.IntegerField(default = 10)
     order = models.IntegerField(default = 0)
+
+    quiz = models.ForeignKey(Quiz, related_name = 'questions', on_delete = models.CASCADE)
 
     def __str__(self):
 
@@ -57,9 +59,10 @@ class Question(models.Model):
 
 class Choice(models.Model):
 
-    question = models.ForeignKey(Question, related_name = 'choices', on_delete = models.CASCADE)
     text = models.CharField(max_length = 255)
     is_correct = models.BooleanField(default = False)
+
+    question = models.ForeignKey(Question, related_name = 'choices', on_delete = models.CASCADE)
 
     def __str__(self):
 
@@ -68,19 +71,23 @@ class Choice(models.Model):
 
 class GameSession(models.Model):
 
-    quiz = models.ForeignKey(Quiz, on_delete = models.CASCADE)
     pin = models.CharField(max_length = 6, unique = True, db_index = True)
     started_at = models.DateTimeField(auto_now_add = True)
     ended_at = models.DateTimeField(null = True, blank = True)
     final_leaderboard = JSONField(null = True, blank = True)
+    event_name = models.CharField(max_length = 255, default = 'standard')
+    
+    quiz = models.ForeignKey(Quiz, on_delete = models.CASCADE)
 
 
 class PlayerResult(models.Model):
 
-    session = models.ForeignKey(GameSession, on_delete = models.CASCADE)
     player_id = models.UUIDField(default = uuid.uuid4, editable = False, db_index = True)
     full_name = models.CharField(max_length = 255)
     contact_info = models.CharField(max_length = 255)
     total_score = models.IntegerField(default = 0)
-    school_name = models.CharField(max_length = 255)
-    grade_level = models.IntegerField()
+    school_name = models.CharField(max_length = 255, null = True, blank = True)
+    grade_level = models.IntegerField(null = True, blank = True)
+
+    session = models.ForeignKey(GameSession, on_delete = models.CASCADE)
+    team_code = models.CharField(max_length = 10, null = True, blank = True)

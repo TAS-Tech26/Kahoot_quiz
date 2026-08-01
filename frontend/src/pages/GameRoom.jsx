@@ -5,16 +5,18 @@ import {useWebSocket} from '../context/WebSocketContext'
 
 import {useGameState} from '../hooks/useGameState'
 
-import {PlayerActiveQuestion, PlayerLobby, PlayerLocked, PlayerGameOver, PlayerResult} from '../components/player/PlayerViews'
+import {PlayerActiveQuestion, PlayerLeaderboard, PlayerLobby, PlayerLocked, PlayerGameOver, PlayerResult} from '../components/player/PlayerViews'
 
 
 export default function GameRoom() {
 
     const {lastMessage, isConnected, sendMessage} = useWebSocket()
 
-    const {gameState, setGameState, playersCount, currentQuestion, answerResult, leaderboard} = useGameState(lastMessage, 1)
+    const {gameState, setGameState, playersCount, currentQuestion, answerResult, leaderboard, playerRanks} = useGameState(lastMessage, 1)
 
     const currentPlayerId = localStorage.getItem('player_id')
+
+    const myRank = playerRanks[currentPlayerId] || null
 
     const handleAnswerSubmit = (choiceId) => {
         if (gameState !== 'active') return
@@ -44,7 +46,7 @@ export default function GameRoom() {
     return (
 
         <div className = "min-h-screen p-4 md:p-8 flex flex-col bg-bg-base text-ink">
-            {gameState === 'lobby' && <LobbyView playersCount = {playersCount} />}
+            {gameState === 'lobby' && <PlayerLobby playersCount = {playersCount} />}
 
             {gameState === 'active' && currentQuestion && (
                 <PlayerActiveQuestion
@@ -57,6 +59,13 @@ export default function GameRoom() {
             {gameState === 'locked' && <PlayerLocked />}
 
             {gameState === 'result' && answerResult && <PlayerResult result = {answerResult} />}
+
+            {gameState === 'leaderboard' && (
+                <PlayerLeaderboard
+                    leaderboard = {leaderboard}
+                    myRank = {myRank}
+                />
+            )}
 
             {gameState === 'game_over' && (
                 <PlayerGameOver

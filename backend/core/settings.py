@@ -28,6 +28,7 @@ load_dotenv()
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
+KAHOOT_SECRET_KEY = os.environ.get('KAHOOT_SECRET_KEY')
 DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
@@ -92,7 +93,10 @@ CHANNEL_LAYERS = {
     'default' : {'BACKEND' : 'channels_redis.core.RedisChannelLayer', 'CONFIG' : {'hosts' : [{'address' : os.environ.get('REDIS_URL'), 'socket_timeout' : None}]}}
 }
 
-REST_FRAMEWORK = {'DEFAULT_AUTHENTICATION_CLASSES' : ('rest_framework_simplejwt.authentication.JWTAuthentication')}
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES' : ['rest_framework_simplejwt.authentication.JWTAuthentication'],
+    'DEFAULT_PERMISSION_CLASSES' : ['rest_framework.permissions.IsAuthenticated']
+}
 
 SIMPLE_JWT = {'ACCESS_TOKEN_LIFETIME' : timedelta(minutes = 60), 'REFRESH_TOKEN_LIFETIME' : timedelta(days = 1), 'AUTH_HEADER_TYPES' : ('Bearer',)}
 

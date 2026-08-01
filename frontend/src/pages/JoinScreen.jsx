@@ -66,6 +66,7 @@ export default function JoinScreen() {
                 <div className = "space-y-4 mb-8">
                     <input
                         type = 'text'
+                        name = 'pin'
                         placeholder = "6-Digit PIN *"
                         required
                         value = {formData.pin}
@@ -75,6 +76,7 @@ export default function JoinScreen() {
 
                     <input
                         type = 'text'
+                        name = 'fullName'
                         placeholder = "Full Name *"
                         required
                         value = {formData.fullName}
@@ -84,6 +86,7 @@ export default function JoinScreen() {
 
                     <input
                         type = 'text'
+                        name = 'contactInfo'
                         placeholder = "Email/Phone *"
                         required
                         value = {formData.contactInfo}
@@ -94,6 +97,7 @@ export default function JoinScreen() {
                     <div className = "flex gap-4">
                         <input
                             type = 'text'
+                            name = 'schoolName'
                             placeholder = "School Name *"
                             required
                             value = {formData.schoolName}
@@ -103,6 +107,7 @@ export default function JoinScreen() {
 
                         <input
                             type = 'text'
+                            name = 'gradeLevel'
                             placeholder = "Grade *"
                             required
                             value = {formData.gradeLevel}

@@ -22,7 +22,7 @@ from django.urls import path, include
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from game.views import create_game_session, list_host_quizzes, verify_pin
+from game.views import create_game_session, export_event_scores, list_host_quizzes, verify_pin
 
 
 urlpatterns = [
@@ -33,5 +33,7 @@ urlpatterns = [
 
     path('api/game/create/', create_game_session, name = 'create_session'),
     path('api/game/verify/<str:pin>', verify_pin, name = 'verify_pin'),
-    path('api/quizzes/', list_host_quizzes, name = 'list_quizzes')
+    path('api/quizzes/', list_host_quizzes, name = 'list_quizzes'),
+
+    path('api/export-scores/<str:event_name>/', export_event_scores, name = 'export_scores')
 ]

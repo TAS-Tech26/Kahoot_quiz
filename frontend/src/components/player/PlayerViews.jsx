@@ -132,3 +132,68 @@ export const PlayerGameOver = ({leaderboard, currentPlayerId}) => {
     )
 
 }
+
+export const PlayerLeaderboard = ({leaderboard, myRank}) => {
+
+    return (
+
+        <div className = "flex flex-col items-center w-full max-w-2xl mx-auto flex-1 py-4 md:py-8 animate-fade-in">
+            <div className = "w-full text-center mb-6 font-mono text-ink font-bold uppercase animate-pulse">
+                Waiting for host to continue...
+            </div>
+
+            <div className = "w-full bg-card-dark text-text-inverted border-4 border-ink p-6 md:p-8 shadow-brutal-lg mb-8">
+                <h2 className = "text-4xl md:text-5xl font-bold uppercase tracking-tighter mb-6 text-center border-b-4 border-ink pb-4">
+                    Top 5
+                </h2>
+
+                <div className = "space-y-4 font-mono text-lg md:text-xl">
+                    {leaderboard && leaderboard.length > 0 ? (
+                        leaderboard.map((player) => (
+                            <div
+                                key = {player.player_id}
+                                className = {`
+                                    flex justify-between items-center p-4 border-4 border-ink shadow-brutal-sm transition-colors
+                                    ${player.rank === myRank
+                                        ? "bg-text-inverted text-card-dark"
+                                        : "bg-btn-neutral text-ink"
+                                    }
+                                `}
+                            >
+                                <div className = "flex gap-3 md:gap-4 overflow-hidden pr-4">
+                                    <span className = 'font-black'>
+                                        #{player.rank}
+                                    </span>
+
+                                    <span className = 'truncate'>
+                                        {player.name}
+                                    </span>
+                                </div>
+
+                                <span className = "font-bold whitespace-nowrap">
+                                    {player.score}
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className = "text-center uppercase text-text-inverted/70 py-4">
+                            Calculating...
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className = "w-full bg-btn-neutral border-4 border-ink p-6 md:p-8 shadow-brutal-md flex flex-col items-center justify-center">
+                <h3 className = "font-mono text-xl md:text-2xl uppercase font-bold text-ink/70 mb-2">
+                    Your Current Rank
+                </h3>
+
+                <div className = "text-7xl md:text-8xl font-black text-ink tracking-tighter drop-shadow-sm">
+                    {myRank ? `#${myRank}` : '---'}
+                </div>
+            </div>
+        </div>
+
+    )
+
+}

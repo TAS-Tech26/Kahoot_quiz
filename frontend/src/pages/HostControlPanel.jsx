@@ -5,7 +5,7 @@ import {useWebSocket} from '../context/WebSocketContext'
 
 import {useGameState} from '../hooks/useGameState'
 
-import {HostLobby, HostActiveQuestion, HostResult, HostPodium} from '../components/host/HostViews'
+import {HostActiveQuestion, HostLobby, HostPodium, HostResult} from '../components/host/HostViews'
 
 
 export default function HostControlPanel() {
@@ -43,8 +43,19 @@ export default function HostControlPanel() {
                     question = {currentQuestion}
                     answersSubmitted = {answersSubmitted}
                     totalPlayers = {playersCount}
-                    onReveal = {() => sendMessage('host_next_question', 'host', {})}
+                    onShowLeaderboard = {() => sendMessage('host_show_leaderboard', 'host', {})}
                 />
+            )}
+
+            {gameState === 'leaderboard' && (
+                <HostResult
+                    leaderboard = {leaderboard}
+                    onNext = {() => sendMessage('host_next_question', 'host', {})}
+                />
+            )}
+
+            {gameState === 'game_over' && (
+                <HostPodium leaderboard = {leaderboard} />
             )}
        </div>
 

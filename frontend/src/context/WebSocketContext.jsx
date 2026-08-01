@@ -47,7 +47,7 @@ export const WebSocketProvider = ({pin, role, children}) => {
 
             if (role === 'player') {
                 const savedPlayerId = localStorage.getItem('player_id')
-                const registrationData = location.state() // Fetched from router
+                const registrationData = location.state // Fetched from router
 
                 if (savedPlayerId) {
                     // Recover player ID if disconnected

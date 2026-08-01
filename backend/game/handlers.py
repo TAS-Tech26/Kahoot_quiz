@@ -1,6 +1,7 @@
 # handlers.py
 
 
+from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from django.utils import timezone
 
@@ -39,7 +40,7 @@ class GameSessionHandler:
         quiz_data = await self._get_compiled_quiz_data()
         first_question = quiz_data['questions'][0]
 
-        await self.redis.initialise_game_start(first_question['id'], quiz_data)
+        await self.redis.initialise_game_state(first_question['id'], quiz_data)
 
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
@@ -56,6 +57,9 @@ class GameSessionHandler:
         )
 
     async def handle_player_join(self, data):
+        """2 ways to check for existing players. 1st - They accidentally disconnect/network drop etc. The player gets reconnected without seeing log in screen (using 
+        localStorage). 2nd - They try to cheat the system by opening a new incognito tab/device switching etc, then a single identity is forced, overriding localStorage"""
+
         provided_id = data.get('player_id')
 
         if provided_id:
@@ -76,23 +80,43 @@ class GameSessionHandler:
 
                 return
 
-        serializer = PlayerJoinSerializer(data = data)
+        serializer = PlayerJoinSerializer(data = data, context = {'session' : self.session_record})
 
-        if not serializer.is_valid():
+        is_valid = await sync_to_async(serializer.is_valid)()
+
+        if not is_valid:
             await self.consumer.send_json({'event_type' : 'error', 'message' : serializer.errors})
 
             return
 
         validated_data = serializer.validated_data
+        contact_info = validated_data['contact_info']
+
+        existing_id = await self.redis.get_player_by_contact(contact_info)
+
+        if existing_id:
+            self.consumer.player_id = existing_id
+
+            await self.redis.add_active_player(existing_id)
+
+            total_players = await self.redis.get_active_players_count()
+
+            await self.consumer.send_json({'event_type' : 'rejoin_success', 'player_id' : existing_id, 'name' : validated_data['full_name']})
+            await self.consumer.channel_layer.group_send(
+                self.consumer.room_group_name,
+                {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : validated_data['full_name'], 'total_players' : total_players}}
+            )
+
+            return
 
         new_player_id = str(uuid.uuid4())
         self.consumer.player_id = new_player_id
 
-        await self.redis.register_new_player(new_player_id, validated_data['full_name'])
+        await self.redis.register_new_player(new_player_id, validated_data['full_name'], contact_info)
 
         total_players = await self.redis.get_active_players_count()
 
-        await self.create_player_result(new_player_id, validated_data)
+        await self._create_player_result(new_player_id, validated_data)
 
         await self.consumer.send_json({'event_type' : 'join_success', 'player_id' : new_player_id})
         await self.consumer.channel_layer.group_send(
@@ -141,12 +165,20 @@ class GameSessionHandler:
 
             await self.redis.increment_player_score(self.consumer.player_id, points_earned)
 
-        total_answers = self.redis.get_answered_count(question_id)
+        total_answers = await self.redis.get_answered_count(question_id)
 
         await self.consumer.send_json({'event_type' : 'answer_result', 'data' : {'is_correct' : is_correct, 'points_earned' : points_earned}})
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
             {'type' : 'broadcast_event', 'event_type' : 'answer_registered', 'data' : {'total_answers' : total_answers}}
+        )
+
+    async def handle_show_leaderboard(self):
+        top_5, player_ranks, _ = await self._get_current_leaderboard()
+
+        await self.consumer.channel_layer.group_send(
+            self.consumer.room_group_name,
+            {'type' : 'broadcast_event', 'event_type' : 'round_leaderboard', 'data' : {'leaderboard' : top_5, 'player_ranks' : player_ranks}}
         )
 
     async def handle_next_question(self):
@@ -180,29 +212,39 @@ class GameSessionHandler:
                 }
             }
         )
-
-    async def _handle_end_game(self):
+    
+    async def _get_current_leaderboard(self, limit = 5):
         raw_scores = await self.redis.get_final_scores()
 
-        final_leaderboard = []
-        player_scores_map = {}
+        top_5 = []
+        player_ranks = {}
+        player_scores_map = {} # Required for final Postgres bulk update
 
-        for player_id, score in raw_scores:
-            name = await self.redis.get_player_name(player_id)
+        for index, (player_id, score) in enumerate(raw_scores):
+            rank = index + 1
 
             score_int = int(score)
 
-            final_leaderboard.append({'name' : name, 'score' : score_int, 'player_id' : player_id})
-
+            player_ranks[player_id] = rank
             player_scores_map[player_id] = score_int
+
+            if rank <= limit:
+                name = await self.redis.get_player_name(player_id)
+
+                top_5.append({'name' : name, 'score' : score_int, 'player_id' : player_id, 'rank' : rank})
+
+        return top_5, player_ranks, player_scores_map
+
+    async def _handle_end_game(self):
+        top_5, player_ranks, player_scores_map = await self._get_current_leaderboard()
 
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
-            {'type' : 'broadcast_event', 'event_type' : 'game_over', 'data' : {'leaderboard' : final_leaderboard[:5]}}
+            {'type' : 'broadcast_event', 'event_type' : 'game_over', 'data' : {'leaderboard' : top_5, 'player_ranks' : player_ranks}}
         )
 
         if player_scores_map:
-            await self._bulk_save_final_scores(player_scores_map, final_leaderboard)
+            await self._bulk_save_final_scores(player_scores_map, top_5)
 
         await self.redis.cleanup_game_data()
 
@@ -225,12 +267,13 @@ class GameSessionHandler:
     @database_sync_to_async
     def _create_player_result(self, player_id, validated_data):
         PlayerResult.objects.create(
-            session = self.session_record,
+            session_id = self.session_record.id,
             player_id = player_id,
             full_name = validated_data['full_name'],
             contact_info = validated_data['contact_info'],
-            school_name = validated_data['school_name'],
-            grade_level = validated_data['grade_level']
+            team_code = validated_data.get('team_code', None),
+            school_name = validated_data.get('school_name', None),
+            grade_level = validated_data.get('grade_level', None)
         )
 
     @database_sync_to_async
@@ -238,10 +281,10 @@ class GameSessionHandler:
         results = PlayerResult.objects.filter(session = self.session_record, player_id__in = player_scores_map.keys())
 
         for result in results:
-            result.total_score = player_scores_map[result.player_id]
+            result.total_score = player_scores_map[str(result.player_id)]
 
         if results:
-            PlayerResult.objects.bulk_update(result, ['total_score'])
+            PlayerResult.objects.bulk_update(results, ['total_score'])
 
         self.session_record.final_leaderboard = final_leaderboard
         self.session_record.ended_at = timezone.now()
