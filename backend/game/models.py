@@ -5,8 +5,6 @@ from django.conf import settings
 from django.db import models
 from django.db.models import JSONField
 
-import uuid
-
 
 class Quiz(models.Model):
 
@@ -30,6 +28,8 @@ class Quiz(models.Model):
                 'id' : q.id,
                 'text' : q.text,
                 'time_limit' : q.time_limit,
+                'media_url' : q.media_url,
+                'media_type' : q.media_type,
                 'choices' : [{'id' : c.id, 'text' : c.text, 'is_correct' : c.is_correct} for c in q.choices.all()]
             })
 
@@ -49,6 +49,9 @@ class Question(models.Model):
     text = models.CharField(max_length = 500)
     time_limit = models.IntegerField(default = 10)
     order = models.IntegerField(default = 0)
+
+    media_url = models.URLField(max_length = 500, null = True, blank = True)
+    media_type = models.CharField(max_length = 10, choices = [('image', 'Image'), ('video', 'Video'), ('audio', 'Audio')], null = True, blank = True)
 
     quiz = models.ForeignKey(Quiz, related_name = 'questions', on_delete = models.CASCADE)
 
@@ -75,19 +78,19 @@ class GameSession(models.Model):
     started_at = models.DateTimeField(auto_now_add = True)
     ended_at = models.DateTimeField(null = True, blank = True)
     final_leaderboard = JSONField(null = True, blank = True)
-    event_name = models.CharField(max_length = 255, default = 'standard')
+    event_name = models.CharField(max_length = 255)
     
     quiz = models.ForeignKey(Quiz, on_delete = models.CASCADE)
 
 
 class PlayerResult(models.Model):
 
-    player_id = models.UUIDField(default = uuid.uuid4, editable = False, db_index = True)
-    full_name = models.CharField(max_length = 255)
-    contact_info = models.CharField(max_length = 255)
+    name = models.CharField(max_length = 255)
     total_score = models.IntegerField(default = 0)
-    school_name = models.CharField(max_length = 255, null = True, blank = True)
-    grade_level = models.IntegerField(null = True, blank = True)
-
+    team_code = models.CharField(max_length = 10, db_index = True)
+    
     session = models.ForeignKey(GameSession, on_delete = models.CASCADE)
-    team_code = models.CharField(max_length = 10, null = True, blank = True)
+
+    class Meta:
+
+        constraints = [models.UniqueConstraint(fields = ['session', 'team_code'], name = 'unique_team_per_session')]

@@ -10,8 +10,9 @@ from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 
 from .models import GameSession, PlayerResult, Quiz
+from .serializers import QuizSerializer
 
-import hmac, random
+import cloudinary.utils, hmac, os, random, time
 
 
 def generate_unique_pin():
@@ -29,12 +30,15 @@ def generate_unique_pin():
 @permission_classes([IsAdminUser]) # Rejects anyone where is_staff = False
 def create_game_session(request):
     quiz_id = request.data.get('quiz_id')
-
-    event_name = request.data.get('event_name', 'standard')
+    event_name = request.data.get('event_name')
 
     if not quiz_id:
 
         return Response({'error' : "quiz_id is required"}, status = 400)
+
+    if not event_name or str(event_name).strip() == '':
+
+        return Response({'error' : "event_name is strictly required for tournament sessions."}, status = 400)
     
     try:
         quiz = Quiz.objects.get(id = quiz_id, author = request.user)
@@ -74,6 +78,18 @@ def verify_pin(request, pin):
 
         return Response({'error' : "Session not found or invalid PIN."}, status = 404)
 
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def create_quiz(request):
+    serializer = QuizSerializer(data = request.data, context = {'request' : request})
+
+    if serializer.is_valid():
+        quiz = serializer.save()
+
+        return Response({'message' : "Quiz created successfully.", 'quiz_id' : quiz.id}, status = 201)
+
+    return Response({'error' : serializer.errors}, status = 400)
+
 @api_view(['GET'])
 @permission_classes([AllowAny]) # Anyone can access this endpoint, but they must provide the correct KAHOOT_SECRET_KEY
 def export_event_scores(request, event_name):
@@ -103,3 +119,16 @@ def export_event_scores(request, event_name):
         return Response({'error' : f"No completed data found for event: {event_name}."}, status = 404)
 
     return Response({'event_name' : event_name, 'total_teams' : len(results), 'scores' : list(results)}, status = 200)
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def get_cloudinary_signature(request):
+    timestamp = int(time.time())
+    signature = cloudinary.utils.api_sign_request({'timestamp' : timestamp, 'folder' : 'kahoot_media'}, os.environ.get('CLOUDINARY_API_SECRET'))
+
+    return Response({
+        'signature' : signature,
+        'timestamp' : timestamp,
+        'api_key' : os.environ.get('CLOUDINARY_API_KEY'),
+        'cloud_name' : os.environ.get('CLOUDINARY_CLOUD_NAME')
+    })

@@ -3,13 +3,13 @@
 
 from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
+from django.conf import settings
 from django.utils import timezone
 
 from .models import GameSession, PlayerResult
-from .serializers import PlayerJoinSerializer
 from .redis_service import GameRedisManager
 
-import json, time, uuid
+import asyncio, httpx, os, time
 
 
 class GameSessionHandler:
@@ -26,8 +26,8 @@ class GameSessionHandler:
         return self.session_record is not None
 
     async def handle_disconnect(self):
-        if hasattr(self.consumer, 'player_id'):
-            await self.redis.remove_active_player(self.consumer.player_id)
+        if hasattr(self.consumer, 'identity'):
+            await self.redis.remove_active_player(self.consumer.identity)
 
             total_players = await self.redis.get_active_players_count()
 
@@ -46,12 +46,12 @@ class GameSessionHandler:
             self.consumer.room_group_name,
             {
                 'type' : 'broadcast_event',
-                'event_type' : 'question_revealed',
+                'event_type' : 'question_staged',
                 'data' : {
                     'question_id' : first_question['id'],
                     'text' : first_question['text'],
-                    'time_limit' : first_question['time_limit'],
-                    'choices' : [{'id' : c['id'], 'text' : c['text']} for c in first_question['choices']]
+                    'media_url' : first_question.get('media_url'),
+                    'media_type' : first_question.get('media_type')
                 }
             }
         )
@@ -60,87 +60,80 @@ class GameSessionHandler:
         """2 ways to check for existing players. 1st - They accidentally disconnect/network drop etc. The player gets reconnected without seeing log in screen (using 
         localStorage). 2nd - They try to cheat the system by opening a new incognito tab/device switching etc, then a single identity is forced, overriding localStorage"""
 
-        provided_id = data.get('player_id')
+        event_name = self.session_record.event_name
 
-        if provided_id:
-            existing_name = await self.redis.get_player_name(provided_id)
+        team_pin = data.get('team_pin')
 
-            if existing_name:
-                self.consumer.player_id = provided_id
+        if not team_pin:
+            await self.consumer.send_json({'event' : 'error', 'data' : {'message' : "Team PIN is required."}})
 
-                await self.redis.add_active_player(provided_id)
+        existing_name = await self.redis.get_player_name(team_pin)
 
-                total_players = await self.redis.get_active_players_count()
+        if existing_name:
+            self.consumer.identity = team_pin
 
-                await self.consumer.send_json({'event_type' : 'rejoin_success', 'player_id' : provided_id, 'name' : existing_name})
-                await self.consumer.channel_layer.group_send(
-                    self.consumer.room_group_name,
-                    {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : existing_name, 'total_players' : total_players}}
-                )
-
-                return
-
-        serializer = PlayerJoinSerializer(data = data, context = {'session' : self.session_record})
-
-        is_valid = await sync_to_async(serializer.is_valid)()
-
-        if not is_valid:
-            await self.consumer.send_json({'event_type' : 'error', 'message' : serializer.errors})
-
-            return
-
-        validated_data = serializer.validated_data
-        contact_info = validated_data['contact_info']
-
-        existing_id = await self.redis.get_player_by_contact(contact_info)
-
-        if existing_id:
-            self.consumer.player_id = existing_id
-
-            await self.redis.add_active_player(existing_id)
+            await self.redis.add_active_player(team_pin)
 
             total_players = await self.redis.get_active_players_count()
 
-            await self.consumer.send_json({'event_type' : 'rejoin_success', 'player_id' : existing_id, 'name' : validated_data['full_name']})
+            sync_payload = await self._build_rejoin_payload(team_pin, existing_name)
+
+            await self.consumer.send_json(sync_payload)
             await self.consumer.channel_layer.group_send(
                 self.consumer.room_group_name,
-                {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : validated_data['full_name'], 'total_players' : total_players}}
+                {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : existing_name, 'total_players' : total_players}}
             )
 
             return
 
-        new_player_id = str(uuid.uuid4())
-        self.consumer.player_id = new_player_id
+        hub_url = os.environ.get('HUB_SERVICE_URL', 'http://127.0.0.1:8000')
+        hub_secret = os.environ.get('HUB_SECRET_KEY')
 
-        await self.redis.register_new_player(new_player_id, validated_data['full_name'], contact_info)
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(f'{hub_url}/api/admin/verify-team/{team_pin}/{event_name}/', headers = {'X-Hub-Secret' : hub_secret})
+            except httpx.RequestError:
+                await self.consumer.send_json({'event' : 'error', 'data' : {'message' : "Failed to contact the orchestrator."}})
 
-        total_players = await self.redis.get_active_players_count()
+                return
 
-        await self._create_player_result(new_player_id, validated_data)
-
-        await self.consumer.send_json({'event_type' : 'join_success', 'player_id' : new_player_id})
-        await self.consumer.channel_layer.group_send(
-            self.consumer.room_group_name,
-            {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : validated_data['full_name'], 'total_players' : total_players}}
-        )
-
-    async def handle_submit_answer(self, data):
-        if not hasattr(self.consumer, 'player_id'):
+        if response.status_code != 200:
+            await self.consumer.send_json({'event' : 'error', 'data' : {'message' : "Invalid team credentials for this event."}})
 
             return
 
-        choice_id = data.get('choice_id')
+        self.consumer.identity = team_pin
+        full_name = f"Team {team_pin}"
 
+        await self.redis.register_new_player(team_pin, full_name)
+
+        total_players = await self.redis.get_active_players_count()
+
+        asyncio.create_task(self._create_player_result(team_pin, full_name))
+
+        await self.consumer.send_json({'event' : 'join_success', 'data' : {'team_pin' : team_pin}})
+        await self.consumer.channel_layer.group_send(
+            self.consumer.room_group_name,
+            {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : full_name, 'total_players' : total_players}}
+        )
+
+    async def handle_submit_answer(self, data):
+        if not hasattr(self.consumer, 'identity'):
+
+            return
+        
         state = await self.redis.get_state()
 
         if state.get('status') != 'active':
 
             return
+        
+        choice_id = data.get('choice_id')
 
         question_id = int(state.get('current_question_id'))
         start_time = float(state.get('start_time'))
 
-        if not await self.redis.mark_player_answered(question_id, self.consumer.player_id):
+        if not await self.redis.mark_player_answered(question_id, self.consumer.identity):
 
             return
 
@@ -163,11 +156,11 @@ class GameSessionHandler:
         if is_correct and time_taken <= time_limit:
             points_earned = round((1 - (time_taken / (time_limit * 2))) * 1000)
 
-            await self.redis.increment_player_score(self.consumer.player_id, points_earned)
+            await self.redis.increment_player_score(self.consumer.identity, points_earned)
 
         total_answers = await self.redis.get_answered_count(question_id)
 
-        await self.consumer.send_json({'event_type' : 'answer_result', 'data' : {'is_correct' : is_correct, 'points_earned' : points_earned}})
+        await self.consumer.send_json({'event' : 'answer_result', 'data' : {'is_correct' : is_correct, 'points_earned' : points_earned}})
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
             {'type' : 'broadcast_event', 'event_type' : 'answer_registered', 'data' : {'total_answers' : total_answers}}
@@ -180,6 +173,58 @@ class GameSessionHandler:
             self.consumer.room_group_name,
             {'type' : 'broadcast_event', 'event_type' : 'round_leaderboard', 'data' : {'leaderboard' : top_5, 'player_ranks' : player_ranks}}
         )
+
+    async def handle_force_sync(self):
+        state = await self.redis.get_state()
+
+        if not state:
+
+            return
+
+        status = state.get('status')
+
+        quiz_data = await self.redis.get_quiz_data()
+
+        q_id = int(state.get('current_question_id'))
+        
+        current_q = next((q for q in quiz_data['questions'] if q['id'] == q_id), None)
+
+        if not current_q:
+
+            return
+
+        if status == 'staging':
+            await self.consumer.channel_layer.group_send(
+                self.consumer.room_group_name,
+                {
+                    'type' : 'broadcast_event',
+                    'event_type' : 'question_staged',
+                    'data' : {
+                        'question_id' : current_q['id'],
+                        'text' : current_q['text'],
+                        'media_url' : current_q.get('media_url'),
+                        'media_type' : current_q.get('media_type')
+                    }
+                }
+            )
+        elif status == 'active':
+            start_time = float(state.get('start_time'))
+            elapsed = time.time() - start_time
+            remaining = max(0, float(current_q['time_limit']) - elapsed)
+
+            await self.consumer.channel_layer.group_send(
+                self.consumer.room_group_name,
+                {
+                    'type' : 'broadcast_event',
+                    'event_type' : 'question_revealed',
+                    'data' : {
+                        'question_id' : current_q['id'],
+                        'text' : current_q['text'],
+                        'time_limit' : remaining,
+                        'choices' : [{'id' : c['id'], 'text' : c['text']} for c in current_q['choices']]
+                    }
+                }
+            )
 
     async def handle_next_question(self):
         state = await self.redis.get_state()
@@ -197,21 +242,90 @@ class GameSessionHandler:
 
         next_question = quiz_data['questions'][next_index]
 
-        await self.redis.update_state_for_next_question(next_index, next_question['id'])
+        await self.redis.stage_question_state(next_index, next_question['id'])
 
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
             {
                 'type' : 'broadcast_event',
-                'event_type' : 'question_revealed',
+                'event_type' : 'question_staged',
                 'data' : {
                     'question_id' : next_question['id'],
                     'text' : next_question['text'],
-                    'time_limit' : next_question['time_limit'],
-                    'choices' : [{'id' : c['id'], 'text' : c['text']} for c in next_question['choices']]
+                    'media_url' : next_question.get('media_url'),
+                    'media_type' : next_question.get('media_type')
                 }
             }
         )
+
+    async def handle_start_timer(self):
+        state = await self.redis.get_state()
+
+        if state.get('status') != 'staging':
+
+            return
+
+        await self.redis.activate_timer_state()
+
+        q_id = int(state.get('current_question_id'))
+
+        quiz_data = await self.redis.get_quiz_data()
+
+        current_q = next((q for q in quiz_data['questions'] if q['id'] == q_id), None)
+
+        if current_q:
+            await self.consumer.channel_layer.group_send(
+                self.consumer.room_group_name,
+                {
+                    'type' : 'broadcast_event',
+                    'event_type' : 'question_active',
+                    'data' : {
+                        'question_id' : current_q['id'],
+                        'time_limit' : current_q['time_limit'],
+                        'choices' : [{'id' : c['id'], 'text' : c['text']} for c in current_q['choices']]
+                    }
+                }
+            )
+
+    async def _build_rejoin_payload(self, team_code, name):
+        """Builds the rejoin payload & attaches the active game state if a Q is live."""
+
+        data_block = {'team_pin' : team_code, 'name' : name}
+
+        state = await self.redis.get_state()
+
+        if state:
+            status = state.get('status')
+
+            quiz_data = await self.redis.get_quiz_data()
+
+            q_id = int(state.get('current_question_id'))
+
+            current_q = next((q for q in quiz_data['questions'] if q['id'] == q_id), None)
+
+            if current_q:
+                if status == 'staging':
+                    data_block['active_question'] = {
+                        'status' : 'staging',
+                        'question_id' : current_q['id'],
+                        'text' : current_q['text'],
+                        'media_url' : current_q.get('media_url'),
+                        'media_type' : current_q.get('media_type')
+                    }
+                elif status == 'active':
+                    start_time = float(state.get('start_time', time.time()))
+                    elapsed = time.time() - start_time
+                    remaining = max(0, float(current_q['time_limit']) - elapsed)
+
+                    data_block['active_question'] = {
+                        'status' : 'active',
+                        'question_id' : current_q['id'],
+                        'text' : current_q['text'],
+                        'time_limit' : remaining,
+                        'choices' : [{'id' : c['id'], 'text' : c['text']} for c in current_q['choices']]
+                    }
+
+        return {'event' : 'rejoin_success', 'data' : data_block}
     
     async def _get_current_leaderboard(self, limit = 5):
         raw_scores = await self.redis.get_final_scores()
@@ -220,18 +334,18 @@ class GameSessionHandler:
         player_ranks = {}
         player_scores_map = {} # Required for final Postgres bulk update
 
-        for index, (player_id, score) in enumerate(raw_scores):
+        for index, (team_code, score) in enumerate(raw_scores):
             rank = index + 1
 
             score_int = int(score)
 
-            player_ranks[player_id] = rank
-            player_scores_map[player_id] = score_int
+            player_ranks[team_code] = rank
+            player_scores_map[team_code] = score_int
 
             if rank <= limit:
-                name = await self.redis.get_player_name(player_id)
+                name = await self.redis.get_player_name(team_code)
 
-                top_5.append({'name' : name, 'score' : score_int, 'player_id' : player_id, 'rank' : rank})
+                top_5.append({'name' : name, 'score' : score_int, 'team_pin' : team_code, 'rank' : rank})
 
         return top_5, player_ranks, player_scores_map
 
@@ -246,14 +360,33 @@ class GameSessionHandler:
         if player_scores_map:
             await self._bulk_save_final_scores(player_scores_map, top_5)
 
+            await self._push_results_to_orchestrator(player_scores_map, player_ranks)
+
         await self.redis.cleanup_game_data()
+
+    async def _push_results_to_orchestrator(self, player_scores_map, player_ranks):
+        event_name = self.session_record.event_name
+
+        hub_url = os.environ.get('HUB_SERVICE_URL', 'http://127.0.0.1:8000')
+        hub_secret = os.environ.get('HUB_SECRET_KEY')
+
+        results_payload = []
+
+        for team_code, rank in player_ranks.items():
+            results_payload.append({'team_code' : team_code, 'rank' : rank, 'assets' : player_scores_map.get(team_code)})
+
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.post(f'{hub_url}/api/webhooks/ingest/{event_name}/', json = {'results' : results_payload}, headers = {'X-Hub-Secret' : hub_secret})
+            except httpx.RequestError as e:
+                print("Failed to push results to orchestrator: {e}")
 
     # --- DB Readers/Writers
     @database_sync_to_async
     def _get_game_session(self, pin):
         try:
 
-            return GameSession.objects.get(pin = pin)
+            return GameSession.objects.select_related('quiz').get(pin = pin)
         
         except GameSession.DoesNotExist:
 
@@ -265,23 +398,19 @@ class GameSessionHandler:
         return self.session_record.quiz.compiled_data
 
     @database_sync_to_async
-    def _create_player_result(self, player_id, validated_data):
+    def _create_player_result(self, team_code, name):
         PlayerResult.objects.create(
             session_id = self.session_record.id,
-            player_id = player_id,
-            full_name = validated_data['full_name'],
-            contact_info = validated_data['contact_info'],
-            team_code = validated_data.get('team_code', None),
-            school_name = validated_data.get('school_name', None),
-            grade_level = validated_data.get('grade_level', None)
+            team_code = team_code,
+            name = name
         )
 
     @database_sync_to_async
     def _bulk_save_final_scores(self, player_scores_map, final_leaderboard):
-        results = PlayerResult.objects.filter(session = self.session_record, player_id__in = player_scores_map.keys())
+        results = PlayerResult.objects.filter(session = self.session_record, team_code__in = player_scores_map.keys())
 
         for result in results:
-            result.total_score = player_scores_map[str(result.player_id)]
+            result.total_score = player_scores_map[result.team_code]
 
         if results:
             PlayerResult.objects.bulk_update(results, ['total_score'])

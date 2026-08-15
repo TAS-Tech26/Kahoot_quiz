@@ -1,7 +1,7 @@
 // HostGameWrapper.jsx
 
 
-import {useParams} from 'react-router-dom'
+import {useParams, Navigate} from 'react-router-dom'
 
 import {WebSocketProvider} from '../context/WebSocketContext'
 
@@ -17,7 +17,7 @@ export default function HostGameWrapper() {
         return (
 
             <Navigate
-                to = '/host/dashboard'
+                to = '/host/create-session'
                 replace
             />
 

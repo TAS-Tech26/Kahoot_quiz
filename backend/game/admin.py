@@ -18,7 +18,7 @@ class PlayerResultInline(admin.TabularInline):
 
     model = PlayerResult
     extra = 0 # Not pre-populating empty rows for players
-    readonly_fields = ('player_id', 'full_name', 'contact_info', 'school_name', 'grade_level', 'total_score')
+    readonly_fields = ('team_code', 'name', 'total_score')
     can_delete = False # Prevent accidental deletion of student records during the event
 
 
@@ -50,10 +50,10 @@ class QuestionAdmin(admin.ModelAdmin):
 @admin.register(GameSession)
 class GameSessionAdmin(admin.ModelAdmin):
 
-    list_display = ('pin', 'quiz', 'started_at', 'ended_at')
-    list_filter = ('started_at',)
+    list_display = ('pin', 'quiz', 'event_name', 'started_at', 'ended_at')
+    list_filter = ('started_at', 'event_name')
 
-    search_fields = ('pin',)
+    search_fields = ('pin', 'event_name')
 
     inlines = [PlayerResultInline] # Clicking on a session lets you see the entire leaderboard
 
@@ -61,10 +61,10 @@ class GameSessionAdmin(admin.ModelAdmin):
 @admin.register(PlayerResult)
 class PlayerResultAdmin(admin.ModelAdmin):
 
-    list_display = ('full_name', 'session_pin', 'total_score', 'school_name', 'grade_level')
-    list_filter = ('grade_level', 'school_name', 'session__pin')
+    list_display = ('team_code', 'name', 'session_pin', 'total_score')
+    list_filter = ('session__pin',)
 
-    search_fields = ('full_name', 'contact_info', 'school_name', 'session__pin')
+    search_fields = ('team_code', 'name', 'session__pin')
 
     def session_pin(self, obj):
 

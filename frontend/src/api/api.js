@@ -1,7 +1,7 @@
 // api.js
 
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api'
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8001/api'
 
 
 export const apiCall = async (endpoint, options = {}) => {
@@ -28,4 +28,8 @@ export const apiCall = async (endpoint, options = {}) => {
 
 export const loginHost = (credentials) => apiCall('/token/', {method : 'POST', body : JSON.stringify(credentials)})
 
-export const createGameSession = (quizId) => apiCall('/game/create/', {method : 'POST', body : JSON.stringify({quiz_id : quizId})})
+export const createGameSession = (quizId, eventName) => apiCall('/game/create/', {method : 'POST', body : JSON.stringify({quiz_id : quizId, event_name : eventName})})
+
+export const getHostQuizzes = () => apiCall('/quizzes/', {method : 'GET'})
+
+export const verifyPin = (pin) => apiCall(`/verify_pin/${pin}`, {method : 'GET'})

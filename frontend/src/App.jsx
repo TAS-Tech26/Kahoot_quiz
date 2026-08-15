@@ -3,6 +3,7 @@
 
 import {BrowserRouter, Route, Routes} from 'react-router-dom'
 
+import CreateQuizPage from './pages/CreateQuizPage'
 import HostLogin from './pages/HostLogin'
 import JoinScreen from './pages/JoinScreen'
 import NotFound from './pages/NotFound'
@@ -34,6 +35,15 @@ export default function App() {
                 <Route
                     path = '/host/login'
                     element = {<HostLogin />}
+                />
+
+                <Route
+                    path = '/host/quiz/create'
+                    element = {
+                        <HostProtectedRoute>
+                            <CreateQuizPage/>
+                        </HostProtectedRoute>
+                    }
                 />
 
                 <Route

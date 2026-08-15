@@ -21,6 +21,10 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
 
+        total_players = await self.handler.redis.get_active_players_count()
+
+        await self.send_json({'event' : 'room_status', 'data' : {'total_players' : total_players}})
+
     async def disconnect(self, close_code):
         await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
 
@@ -35,12 +39,16 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             await self.handler.handle_host_start()
         elif action == 'host_next_question' and is_host:
             await self.handler.handle_next_question()
+        elif action == 'host_start_timer' and is_host:
+            await self.handler.handle_start_timer()
         elif action == 'player_join' and not is_host:
             await self.handler.handle_player_join(content.get('data'))
         elif action == 'submit_answer' and not is_host:
             await self.handler.handle_submit_answer(content.get('data'))
         elif action == 'host_show_leaderboard' and is_host:
             await self.handler.handle_show_leaderboard()
+        elif action == 'host_force_sync' and is_host:
+            await self.handler.handle_force_sync()
         else:
             await self.send_json({'event_type' : 'error', 'message' : "Invalid action, missing data or unauthorized role."})
 

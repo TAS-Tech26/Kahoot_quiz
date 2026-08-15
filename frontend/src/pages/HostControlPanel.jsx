@@ -5,7 +5,7 @@ import {useWebSocket} from '../context/WebSocketContext'
 
 import {useGameState} from '../hooks/useGameState'
 
-import {HostActiveQuestion, HostLobby, HostPodium, HostResult} from '../components/host/HostViews'
+import {HostActiveQuestion, HostLobby, HostPodium, HostResult, HostStaging} from '../components/host/HostViews'
 
 
 export default function HostControlPanel() {
@@ -35,6 +35,13 @@ export default function HostControlPanel() {
                 <HostLobby
                     playersCount = {playersCount}
                     onStart = {() => sendMessage('host_start', 'host', {})}
+                />
+            )}
+
+            {gameState === 'staging' && currentQuestion && (
+                <HostStaging
+                    question = {currentQuestion}
+                    onStartTimer = {() => sendMessage('host_start_timer', 'host', {})}
                 />
             )}
 

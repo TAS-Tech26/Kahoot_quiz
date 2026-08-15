@@ -27,6 +27,55 @@ export const HostLobby = ({playersCount, onStart}) => (
     
 )
 
+export const HostStaging = ({question, onStartTimer}) => (
+
+    <div className = "flex-1 flex flex-col items-center justify-center w-full max-w-5xl mx-auto space-y-8 mt-8">
+        <div className = "bg-btn-neutral border-4 border-ink shadow-brutal-lg p-8 text-center w-full">
+            <h2 className = "text-4xl font-bold text-ink mb-8 uppercase tracking-tighter">
+                {question.text}
+            </h2>
+
+            {question.media_url && (
+                <div className = "flex justify-center mb-4 border-4 border-ink shadow-brutal-sm p-2 bg-bg-base">
+                    {question.media_type === 'image' && (
+                        <img
+                            src = {question.media_url}
+                            alt = "Media"
+                            className = "max-h-96 object-contain"
+                        />
+                    )}
+
+                    {question.media_type === 'video' && (
+                        <video
+                            src = {question.media_url}
+                            controls
+                            autoPlay
+                            className = "max-h-96 object-contain"
+                        />
+                    )}
+
+                    {question.media_type === 'audio' && (
+                        <audio
+                            src = {question.media_url}
+                            controls
+                            autoPlay
+                            className = "w-full max-w-2xl"
+                        />
+                    )}
+                </div>
+            )}
+        </div>W
+
+        <button
+            onClick = {onStartTimer}
+            className = "w-full bg-btn-correct text-ink font-black text-4xl py-8 border-4 border-ink shadow-brutal-md hover:-translate-y-1 hover:shadow-brutal-lg active:translate-y-1.5 active:shadow-none transition-all uppercase tracking-widest"
+        >
+            Start Timer
+        </button>
+    </div>
+
+)
+
 export const HostActiveQuestion = ({question, answersSubmitted, totalPlayers, onShowLeaderboard}) => (
 
     <div className = "flex-1 flex flex-col w-full max-w-5xl mx-auto space-y-8">
@@ -68,7 +117,7 @@ export const HostResult = ({leaderboard, onNext}) => (
                 {leaderboard?.length > 0 ? (
                     leaderboard.map((player) => (
                         <div
-                            key = {player.player_id}
+                            key = {player.team_pin}
                             className = "flex justify-between items-center border-b-4 border-ink py-4 last:border-b-0 font-mono"
                         >
                             <span className = "text-2xl font-bold truncate pr-4">

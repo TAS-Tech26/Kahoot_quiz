@@ -1,22 +1,35 @@
 // GameRoom.jsx
 
 
+import {useEffect} from 'react'
+import {useNavigate, useParams} from 'react-router-dom'
+
 import {useWebSocket} from '../context/WebSocketContext'
 
 import {useGameState} from '../hooks/useGameState'
 
-import {PlayerActiveQuestion, PlayerLeaderboard, PlayerLobby, PlayerLocked, PlayerGameOver, PlayerResult} from '../components/player/PlayerViews'
+import {PlayerActiveQuestion, PlayerLeaderboard, PlayerLobby, PlayerLocked, PlayerGameOver, PlayerResult, PlayerStaging} from '../components/player/PlayerViews'
 
 
 export default function GameRoom() {
 
+    const {pin} = useParams()
     const {lastMessage, isConnected, sendMessage} = useWebSocket()
-
     const {gameState, setGameState, playersCount, currentQuestion, answerResult, leaderboard, playerRanks} = useGameState(lastMessage, 1)
 
-    const currentPlayerId = localStorage.getItem('player_id')
+    const navigate = useNavigate()
 
-    const myRank = playerRanks[currentPlayerId] || null
+    const currentTeamPin = localStorage.getItem(`team_pin_${pin}`)
+
+    const myRank = playerRanks[currentTeamPin] || null
+
+    useEffect(() => {
+        if (gameState === 'error' && answerResult?.type === 'stale_session') {
+            localStorage.removeItem(`team_pin_${pin}`)
+
+            navigate('/', {replace : true})
+        }
+    }, [gameState, answerResult, navigate, pin])
 
     const handleAnswerSubmit = (choiceId) => {
         if (gameState !== 'active') return
@@ -48,6 +61,10 @@ export default function GameRoom() {
         <div className = "min-h-screen p-4 md:p-8 flex flex-col bg-bg-base text-ink">
             {gameState === 'lobby' && <PlayerLobby playersCount = {playersCount} />}
 
+            {gameState === 'staging' && currentQuestion && (
+                <PlayerStaging question = {currentQuestion} />
+            )}
+
             {gameState === 'active' && currentQuestion && (
                 <PlayerActiveQuestion
                     question = {currentQuestion}
@@ -70,7 +87,7 @@ export default function GameRoom() {
             {gameState === 'game_over' && (
                 <PlayerGameOver
                     leaderboard = {leaderboard}
-                    currentPlayerId = {currentPlayerId}
+                    currentPlayerId = {currentTeamPin}
                 />
             )}
         </div>

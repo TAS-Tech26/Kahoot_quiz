@@ -1,95 +1,151 @@
-// HostDashboard.jsx
+// SessionCreator.jsx
 
 
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 
-import {createGameSession} from '../api/api'
+import {createGameSession, getHostQuizzes} from '../api/api'
 
 
 export default function SessionCreator() {
 
-    const [quizId, setQuizId] = useState('')
+    const [quizzes, setQuizzes] = useState([])
     const [errorMsg, setErrorMsg] = useState('')
-    const [isDeploying, setIsDeploying] = useState(false)
+    const [isLoading, setIsLoading] = useState(true)
+    const [deployingId, setDeployingId] = useState(null)
+    const [eventName, setEventName] = useState(null)
 
     const navigate = useNavigate()
 
-    const handleCreateGame = async (e) => {
-        e.preventDefault()
+    useEffect(() => {
+        const fetchQuizzes = async () => {
+            try {
+                const response = await getHostQuizzes()
+
+                if (response.ok) {
+                    const data = await response.json()
+
+                    setQuizzes(data)
+                } else {
+                    setErrorMsg("Failed to retrieve your quizzes.")
+                }
+            } catch (err) {
+                setErrorMsg("Failed to contact the server.")
+            } finally {
+                setIsLoading(false)
+            }
+        }
+
+        fetchQuizzes()
+    }, [])
+
+    const handleDeployGame = async (quizId) => {
+        if (!eventName.trim()) {
+            setErrorMsg("You must specify the event name before deploying.")
+
+            return
+        }
 
         setErrorMsg(null)
-
-        if (!quizId.trim()) return setErrorMsg("ERROR: Target Quiz ID is required to initialise deployment.")
-
-        setIsDeploying(true)
+        setDeployingId(quizId)
 
         try {
-            const response = await createGameSession(quizId)
+            const response = await createGameSession(quizId, eventName.trim())
             const data = await response.json()
 
             if (response.ok) {
                 navigate(`/host/game/${data.pin}`)
             } else {
                 setErrorMsg(`DEPLOYMENT REJECTED: ${data.error || "Unknown anomaly detected."}`)
+                setDeployingId(null)
             }
         } catch (err) {
-            setErrorMsg("CRITICAL ERROR: Failed to establish contact with the server.")
-        } finally {
-            setIsDeploying(false)
+            setErrorMsg("Failed to establish contact with the server.")
+            setDeployingId(null)
         }
     }
 
     return (
 
         <div className = "min-h-screen bg-bg-base p-4 md:p-8 text-ink flex flex-col items-center">
-            <div className = "w-full max-w-2xl">
-                <h1 className = "text-5xl md:text-6xl font-bold uppercase mb-12 border-b-8 border-ink pb-4 tracking-tighter">
-                    Command Center
-                </h1>
+            <div className = "w-full max-w-5xl">
+                <div className = "flex justify-between items-end mb-12 border-b-8 border-ink pb-4">
+                    <h1 className = "text-5xl md:text-6xl font-bold uppercase tracking-tighter">
+                        Command Center
+                    </h1>
+
+                    <button
+                        onClick = {() => navigate('/host/quiz/create')}
+                        className = "bg-btn-correct text-ink border-4 border-ink px-6 py-3 font-bold font-mono text-xl shadow-brutal-sm hover:-translate-y-1 hover:shadow-brutal-md active:translate-y-1 active:shadow-none transition-all uppercase"
+                    >
+                        + Create New Quiz
+                    </button>
+                </div>
 
                 {errorMsg && (
-                    <div className = "bg-btn-wrong text-ink border-4 border-ink p-4 mb-8 font-bold font-mono text-lg shadow-brutal-sm">
+                    <div className = "bg-btn-wrong text-ink border-4 border-ink p-4 mb-8 font-bold font-mono text-lg shadow-brutal-sm uppercase">
                         {errorMsg}
                     </div>
                 )}
 
-                <form
-                    onSubmit = {handleCreateGame}
-                    className = "bg-card-dark border-4 border-ink p-8 shadow-brutal-lg"
-                >
-                    <h2 className = "text-text-inverted text-3xl font-bold mb-6 uppercase tracking-tight">
-                        Deploy Session
-                    </h2>
+                <div className = "mb-8 bg-card-dark p-6 border-4 border-ink shadow-brutal-sm">
+                    <label className = "block text-text-inverted font-mono font-bold text-xl uppercase mb-4">
+                        Event Name
+                    </label>
 
-                    <div className = 'mb-8'>
-                        <label className = "block text-text-inverted font-mono text-xl mb-4">
-                            Target Quiz ID
-                        </label>
+                    <input
+                        type = 'text'
+                        placeholder = 'e.g. Bid2Build'
+                        value = {eventName}
+                        onChange = {(e) => setEventName(e.target.value)}
+                        className = "w-full max-w-md bg-btn-neutral text-ink border-4 border-ink p-4 font-mono text-xl focus:outline-none focus:shadow-brutal-md uppercase"
+                    />
+                </div>
 
-                        <input
-                            type = 'number'
-                            placeholder = 'e.g. 1'
-                            value = {quizId}
-                            onChange = {(e) => {
-                                setQuizId(e.target.value)
-                                setErrorMsg(null)
-                            }}
-                            className = "w-full bg-btn-neutral text-ink border-4 border-ink p-4 font-mono text-2xl shadow-brutal-sm focus:outline-none focus:shadow-brutal-md transition-shadow placeholder:text-ink/50"
-                        />
+                {isLoading ? (
+                    <div className = "text-center font-mono text-2xl font-bold uppercase animate-pulse">
+                        Retrieving quizzes...
                     </div>
+                ) : (
+                    <div className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {quizzes.length === 0 ? (
+                            <div className = "col-span-full bg-card-dark text-text-inverted border-4 border-ink p-12 text-center shadow-brutal-lg">
+                                <p className = "font-mono text-2xl uppercase font-bold">
+                                    No quizzes found.
+                                </p>
 
-                    <button
-                        type = 'submit'
-                        disabled = {isDeploying}
-                        className = "w-full bg-ink text-text-inverted font-bold text-2xl md:text-3xl py-6 border-4 border-ink shadow-brutal-md hover:-translate-y-1 hover:shadow-brutal-lg active:-translate-y-1.5 active:translate-x-1.5 active:shadow-none disabled:opacity-50 disabled:pointer-events-none transition-all uppercase tracking-widest"
-                    >
-                        {isDeploying
-                            ? 'Initialising...'
-                            : "Initialise Game"
-                        }
-                    </button>
-                </form>
+                                <p className = "font-mono mt-4 text-text-inverted/70">
+                                    Click "Create New Quiz" to begin.
+                                </p>
+                            </div>
+                        ) : (
+                            quizzes.map((quiz) => (
+                                <div
+                                    key = {quiz.id}
+                                    className = "bg-btn-neutral border-4 border-ink p-6 shadow-brutal-lg flex flex-col justify-between"
+                                >
+                                    <div>
+                                        <div className = "text-xs font-mono font-bold uppercase tracking-widest text-ink/50 mb-2">
+                                            ID: {quiz.id}
+                                        </div>
+
+                                        <h2 className = "text-2xl font-bold uppercase tracking-tight mb-6 line-clamp-2">
+                                            {quiz.title}
+                                        </h2>
+                                    </div>
+
+                                    <button
+                                        onClick = {() => handleDeployGame(quiz.id)}
+                                        disabled = {deployingId === quiz.id || !eventName.trim()}
+                                        className = "w-full bg-ink text-text-inverted font-bold text-xl py-4 border-4 border-ink shadow-brutal-sm hover:-translate-y-1 hover:shadow-brutal-md active:translate-y-1 active:shadow-none transition-all uppercase tracking-widest disabled:opacity-50"
+                                    >
+                                        {deployingId === quiz.id ? 'Deploying...' : 'Deploy'}
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                )}
             </div>
         </div>
 

@@ -19,12 +19,6 @@ class GameRedisManager:
         self.active_key = f'game:{self.pin}:active_players'
         self.scores_key = f'game:{self.pin}:scores'
         self.quiz_key = f'game:{self.pin}:quiz'
-        self.identities_key = f'game:{self.pin}:identities'
-
-    async def get_player_by_contact(self, contact_info):
-        """Checks if the email/phone already belongs to a registered UUID"""
-
-        return await redis_client.hget(self.identities_key, contact_info)
 
     async def get_state(self):
 
@@ -38,48 +32,50 @@ class GameRedisManager:
     async def initialise_game_state(self, first_question_id, quiz_data):
         await redis_client.hset(
             self.state_key,
-            mapping = {'status' : 'active', 'current_question_index' : 0, 'current_question_id' : first_question_id, 'start_time' : time.time()}
+            mapping = {'status' : 'staging', 'current_question_index' : 0, 'current_question_id' : first_question_id}
         )
         await redis_client.set(self.quiz_key, json.dumps(quiz_data))
 
-    async def update_state_for_next_question(self, next_index, next_question_id):
-        await redis_client.hset(
-            self.state_key,
-            mapping = {'current_question_index' : next_index, 'current_question_id' : next_question_id, 'start_time' : time.time()}
-        )
+    async def register_new_player(self, team_code, name):
+        await redis_client.hset(self.players_key, team_code, name)
+        await redis_client.zadd(self.scores_key, {team_code : 0}, nx = True)
+        await redis_client.sadd(self.active_key, team_code)
 
-    async def register_new_player(self, player_id, full_name, contact_info):
-        await redis_client.hset(self.players_key, player_id, full_name)
-        await redis_client.hset(self.identities_key, contact_info, player_id)
-        await redis_client.zadd(self.scores_key, {player_id : 0}, nx = True)
-        await redis_client.sadd(self.active_key, player_id)
+    async def add_active_player(self, team_code):
+        await redis_client.sadd(self.active_key, team_code)
 
-    async def add_active_player(self, player_id):
-        await redis_client.sadd(self.active_key, player_id)
+    async def remove_active_player(self, team_code):
+        await redis_client.srem(self.active_key, team_code)
 
-    async def remove_active_player(self, player_id):
-        await redis_client.srem(self.active_key, player_id)
+    async def stage_question_state(self, question_index, question_id):
+        await redis_client.hset(self.state_key, mapping = {'status' : 'staging', 'current_question_index' : question_index, 'current_question_id' : question_id})
+        await redis_client.hdel(self.state_key, 'start_time')
+
+    async def activate_timer_state(self):
+        """Starts the official timer for the current staged Q"""
+
+        await redis_client.hset(self.state_key, mapping = {'status' : 'active', 'start_time' : time.time()})
 
     async def get_active_players_count(self):
 
         return await redis_client.scard(self.active_key)
 
-    async def get_player_name(self, player_id):
+    async def get_player_name(self, team_code):
 
-        return await redis_client.hget(self.players_key, player_id)
+        return await redis_client.hget(self.players_key, team_code)
 
-    async def mark_player_answered(self, question_id, player_id):
+    async def mark_player_answered(self, question_id, team_code):
         answered_key = f'game:{self.pin}:answered:{question_id}' # Dynamic key for each Q
 
-        return await redis_client.sadd(answered_key, player_id)
+        return await redis_client.sadd(answered_key, team_code)
 
     async def get_answered_count(self, question_id):
         answered_key = f'game:{self.pin}:answered:{question_id}'
 
         return await redis_client.scard(answered_key)
 
-    async def increment_player_score(self, player_id, points):
-        await redis_client.zincrby(self.scores_key, points, player_id)
+    async def increment_player_score(self, team_code, points):
+        await redis_client.zincrby(self.scores_key, points, team_code)
 
     async def get_final_scores(self):
 

@@ -1,63 +1,72 @@
 # serializers.py
 
 
+from django.db import transaction
 from rest_framework import serializers
 
-from .models import PlayerResult
-
-import os, requests
+from .models import Choice, Question, Quiz
 
 
-class PlayerJoinSerializer(serializers.Serializer):
+class ChoiceSerializer(serializers.ModelSerializer):
 
-    full_name = serializers.CharField(max_length = 255, allow_blank = False, trim_whitespace = True)
-    contact_info = serializers.CharField(max_length = 255, allow_blank = False, trim_whitespace = True)
-    school_name = serializers.CharField(max_length = 255, allow_blank = True, trim_whitespace = True, required = False)
-    grade_level = serializers.IntegerField(required = False) # Update this after confirming with EVM
+    class Meta:
 
-    team_code = serializers.CharField(max_length = 10, allow_blank = True, required = False)
+        model = Choice
+        fields = ['text', 'is_correct']
 
-    def validate(self, data):
-        session = self.context.get('session')
+class QuestionSerializer(serializers.ModelSerializer):
 
-        if not session:
+    choices = ChoiceSerializer(many = True)
 
-            raise serializers.ValidationError("Critical Error: Session context missing.")
-        
-        event_name = session.event_name
+    class Meta:
 
-        if event_name == 'standard':
-            if not data.get('school_name'):
-        
-                raise serializers.ValidationError({'school_name' : "School name is required for standard events."})
-            if not data.get('grade_level'):
-                    
-                raise serializers.ValidationError({'grade_level' : "Grade level is required for standard events."})
-        
-            return data
+        model = Question
+        fields = ['text', 'time_limit', 'media_url', 'media_type', 'choices']
 
-        team_code = data.get('team_code')
+    def validate_choices(self, value):
+        if len(value) < 2:
 
-        if not team_code:
+            raise serializers.ValidationError("A question must have at least 2 choices.")
 
-            raise serializers.ValidationError({'team_code' : "Team code is required for tournament events."})
+        has_correct = any(c.get('is_correct') for c in value)
 
-        # Only 1 device per team code per room
-        if PlayerResult.objects.filter(session = session, team_code = team_code).exists():
+        if not has_correct:
 
-            raise serializers.ValidationError({'team_code' : "This team code has already joined the lobby. Only 1 device is allowed."})
+            raise serializers.ValidationError("A question must have at least 1 correct choice.")
 
-        hub_url = os.environ.get('HUB_SERVICE_URL')
-        hub_secret_key = os.environ.get('HUB_SECRET_KEY')
+        return value
 
-        try:
-            verify_response = requests.get(f'{hub_url}/api/admin/verify-team/{team_code}/{event_name}/', headers = {'X-Hub-Secret' : hub_secret_key}, timeout = 3)
+class QuizSerializer(serializers.ModelSerializer):
 
-            if not verify_response.ok:
+    questions = QuestionSerializer(many = True)
 
-                raise serializers.ValidationError({'team_code' : "Invalid team code. Please try again."})
-        except requests.exceptions.RequestException:
+    class Meta:
 
-            raise serializers.ValidationError({'team_code' : "Error occurred while verifying team code. Please try again."})
+        model = Quiz
+        fields = ['title', 'questions']
 
-        return data
+    def validate_questions(self, value):
+        if not value or len(value) < 1:
+
+            raise serializers.ValidationError("The quiz must contain at least 1 question.")
+
+        return value
+
+    def create(self, validated_data):
+        questions_data = validated_data.pop('questions')
+
+        author = self.context['request'].user
+
+        with transaction.atomic():
+            quiz = Quiz.objects.create(author = author, **validated_data)
+
+            for index, q_data in enumerate(questions_data):
+                choices_data = q_data.pop('choices')
+
+                question = Question.objects.create(quiz = quiz, order = index, **q_data)
+
+                Choice.objects.bulk_create([Choice(question = question, **c_data) for c_data in choices_data])
+
+            quiz.compile_for_redis()
+
+        return quiz

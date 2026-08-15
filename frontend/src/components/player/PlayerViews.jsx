@@ -26,6 +26,24 @@ export const PlayerLobby = ({playersCount}) => (
 
 )
 
+export const PlayerStaging = ({question}) => (
+
+    <div className = "flex-1 flex flex-col items-center justify-center w-full max-w-md mx-auto">
+        <div className = "bg-card-dark text-text-inverted border-4 border-ink shadow-brutal-lg p-12 text-center w-full">
+            <h2 className = "text-3xl md:text-4xl font-bold uppercase tracking-tight mb-8">
+                Look at the screen!
+            </h2>
+
+            <div className = "inline-block px-6 py-4 bg-bg-base border-4 border-ink shadow-brutal-sm">
+                <span className = "font-mono font-bold text-xl text-ink uppercase animate-pulse">
+                    {question?.media_url ? "Media Playing..." : "Get Ready..."}
+                </span>
+            </div>
+        </div>
+    </div>
+
+)
+
 export const PlayerActiveQuestion = ({question, onAnswerSubmit, onLockUI}) => (
 
     <div className = "flex-1 flex flex-col items-center justify-center w-full max-w-4xl mx-auto space-y-8 mt-8">
@@ -100,9 +118,9 @@ export const PlayerResult = ({result}) => {
 
 }
 
-export const PlayerGameOver = ({leaderboard, currentPlayerId}) => {
+export const PlayerGameOver = ({leaderboard, currentTeamPin}) => {
 
-    const playerRankIndex = leaderboard?.findIndex(p => p.player_id === currentPlayerId)
+    const playerRankIndex = leaderboard?.findIndex(p => p.team_pin === currentTeamPin)
     const playerRank = playerRankIndex !== -1 ? playerRankIndex + 1 : 'N/A'
 
     return (
@@ -151,7 +169,7 @@ export const PlayerLeaderboard = ({leaderboard, myRank}) => {
                     {leaderboard && leaderboard.length > 0 ? (
                         leaderboard.map((player) => (
                             <div
-                                key = {player.player_id}
+                                key = {player.team_pin}
                                 className = {`
                                     flex justify-between items-center p-4 border-4 border-ink shadow-brutal-sm transition-colors
                                     ${player.rank === myRank

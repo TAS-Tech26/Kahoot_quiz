@@ -46,17 +46,16 @@ export const WebSocketProvider = ({pin, role, children}) => {
             setIsConnected(true)
 
             if (role === 'player') {
-                const savedPlayerId = localStorage.getItem('player_id')
+                const savedTeamPin = localStorage.getItem(`team_pin_${pin}`)
                 const registrationData = location.state // Fetched from router
+                
+                const activeTeamPin = registrationData?.team_pin || savedTeamPin
 
-                if (savedPlayerId) {
+                if (activeTeamPin) {
                     // Recover player ID if disconnected
-                    ws.send(JSON.stringify({action : 'player_join', role : 'player', data : {player_id : savedPlayerId}}))
-                } else if (registrationData) {
-                    // New player registration
-                    ws.send(JSON.stringify({action : 'player_join', role : 'player', data : registrationData}))
+                    ws.send(JSON.stringify({action : 'player_join', role : 'player', data : {team_pin : activeTeamPin}}))
 
-                    window.history.replaceState({}, document.title)
+                    if (registrationData) window.history.replaceState({}, document.title)
                 } else {
                     console.error("Connection rejected: No player registration data found.")
 
@@ -75,7 +74,7 @@ export const WebSocketProvider = ({pin, role, children}) => {
             setLastMessage(parsedData)
 
             // Auto-save player_id to localStorage when backend sends 1
-            if (['join_success', 'rejoin_success'].includes(parsedData.event)) localStorage.setItem('player_id', parsedData.data.player_id)
+            if (['join_success', 'rejoin_success'].includes(parsedData.event)) localStorage.setItem(`team_pin_${pin}`, parsedData.data.team_pin)
         }
 
         ws.onclose = () => setIsConnected(false)
