@@ -157,6 +157,8 @@ class GameSessionHandler:
             points_earned = round((1 - (time_taken / (time_limit * 2))) * 1000)
 
             await self.redis.increment_player_score(self.consumer.identity, points_earned)
+            await self.redis.increment_correct_answers(self.consumer.identity)
+            await self.redis.add_player_time(self.consumer.identity, time_taken)
 
         total_answers = await self.redis.get_answered_count(question_id)
 
@@ -332,7 +334,9 @@ class GameSessionHandler:
 
         top_5 = []
         player_ranks = {}
-        player_scores_map = {} # Required for final Postgres bulk update
+        player_scores_map = {}
+        player_correct_map = {}
+        player_time_map = {}
 
         for index, (team_code, score) in enumerate(raw_scores):
             rank = index + 1
@@ -342,15 +346,21 @@ class GameSessionHandler:
             player_ranks[team_code] = rank
             player_scores_map[team_code] = score_int
 
+            correct_count = await self.redis.get_correct_answers(team_code)
+            player_correct_map[team_code] = correct_count
+
+            time_taken = await self.redis.get_player_time(team_code)
+            player_time_map[team_code] = time_taken
+
             if rank <= limit:
                 name = await self.redis.get_player_name(team_code)
 
                 top_5.append({'name' : name, 'score' : score_int, 'team_pin' : team_code, 'rank' : rank})
 
-        return top_5, player_ranks, player_scores_map
+        return top_5, player_ranks, player_scores_map, player_correct_map, player_time_map
 
     async def _handle_end_game(self):
-        top_5, player_ranks, player_scores_map = await self._get_current_leaderboard()
+        top_5, player_ranks, player_scores_map, player_correct_map, player_time_map = await self._get_current_leaderboard()
 
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
@@ -358,13 +368,12 @@ class GameSessionHandler:
         )
 
         if player_scores_map:
-            await self._bulk_save_final_scores(player_scores_map, top_5)
-
-            await self._push_results_to_orchestrator(player_scores_map, player_ranks)
+            await self._bulk_save_final_scores(player_scores_map, player_correct_map, player_time_map, top_5)
+            await self._push_results_to_orchestrator(player_scores_map, player_correct_map, player_time_map, player_ranks)
 
         await self.redis.cleanup_game_data()
 
-    async def _push_results_to_orchestrator(self, player_scores_map, player_ranks):
+    async def _push_results_to_orchestrator(self, player_scores_map, player_correct_map, player_time_map, player_ranks):
         event_name = self.session_record.event_name
 
         hub_url = os.environ.get('HUB_SERVICE_URL', 'http://127.0.0.1:8000')
@@ -373,7 +382,13 @@ class GameSessionHandler:
         results_payload = []
 
         for team_code, rank in player_ranks.items():
-            results_payload.append({'team_code' : team_code, 'rank' : rank, 'assets' : player_scores_map.get(team_code)})
+            score = player_scores_map.get(team_code, 0)
+            correct = player_correct_map.get(team_code, 0)
+            time_taken = player_time_map.get(team_code, 0.0)
+
+            assets_str = f"{score} PTS | {correct} Qs | {time_taken:.2f}s" # Format the data into a single str for the Hub's EventStanding model
+
+            results_payload.append({'team_code' : team_code, 'rank' : rank, 'assets' : assets_str})
 
         async with httpx.AsyncClient() as client:
             try:
@@ -406,14 +421,16 @@ class GameSessionHandler:
         )
 
     @database_sync_to_async
-    def _bulk_save_final_scores(self, player_scores_map, final_leaderboard):
+    def _bulk_save_final_scores(self, player_scores_map, player_correct_map, player_time_map, final_leaderboard):
         results = PlayerResult.objects.filter(session = self.session_record, team_code__in = player_scores_map.keys())
 
         for result in results:
             result.total_score = player_scores_map[result.team_code]
+            result.correct_answers = player_correct_map.get(result.team_code, 0)
+            result.total_time = player_time_map.get(result.team_code, 0.0)
 
         if results:
-            PlayerResult.objects.bulk_update(results, ['total_score'])
+            PlayerResult.objects.bulk_update(results, ['total_score', 'correct_answers', 'total_time'])
 
         self.session_record.final_leaderboard = final_leaderboard
         self.session_record.ended_at = timezone.now()

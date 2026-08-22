@@ -1,23 +1,26 @@
 // QuizBuilder.jsx
 
 
-import {useState} from 'react'
+import {useEffect, useState} from 'react'
 import {useFieldArray, useForm} from 'react-hook-form'
-import {useNavigate} from 'react-router-dom'
+import {useNavigate, useParams} from 'react-router-dom'
 
-import {apiCall} from '../../api/api'
+import {apiCall, getHostQuizDetail, updateHostQuiz} from '../../api/api'
 
 import QuestionEditor from './components/QuestionEditor'
 
 
 export default function QuizBuilder() {
 
+    const {quizId} = useParams()
+    
+    const navigate = useNavigate()
+
     const [activeQuestion, setActiveQuestion] = useState(0)
     const [isUploading, setIsUploading] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
-
-    const navigate = useNavigate()
+    const [isLoadingData, setIsLoadingData] = useState(!!quizId)
 
     const emptyQuestion = {
         text : '',
@@ -26,9 +29,34 @@ export default function QuizBuilder() {
         media_type : null,
         choices : [{text : '', is_correct : false}, {text : '', is_correct : false}, {text : '', is_correct : false}, {text : '', is_correct : false}]
     }
-    const {register, control, handleSubmit, watch, setValue} = useForm({defaultValues : {title : '', questions : [emptyQuestion]}})
+
+    const {register, control, handleSubmit, watch, setValue, reset} = useForm({defaultValues : {title : '', questions : [emptyQuestion]}})
 
     const {fields, append, remove} = useFieldArray({control, name : 'questions'})
+
+    useEffect(() => {
+        if (!quizId) return
+
+        const fetchQuiz = async () => {
+            try {
+                const response = await getHostQuizDetail(quizId)
+
+                if (response.ok) {
+                    const data = await response.json()
+
+                    reset(data) // Instantly populate the entire form, including nested IDs 
+                } else {
+                    setErrorMsg("Failed to load quiz data.")
+                }
+            } catch (err) {
+                setErrorMsg("Failed to contact the server")
+            } finally {
+                setIsLoadingData(false)
+            }
+        }
+
+        fetchQuiz()
+    }, [quizId, reset])
 
     const onSubmit = async (data) => {
         setIsSubmitting(true)
@@ -38,19 +66,38 @@ export default function QuizBuilder() {
         const cleanedData = {...data, questions : data.questions.map(q => ({...q, choices : q.choices.filter(c => c.text.trim() !== '')}))}
 
         try {
-            const response = await apiCall('/create_quiz/', {method : 'POST', body : JSON.stringify(cleanedData)})
+            let response
+
+            if (quizId) {
+                response = await updateHostQuiz(quizId, cleanedData)
+            } else {
+                response = await apiCall('/quizzes/create/', {method : 'POST', body : JSON.stringify(cleanedData)})
+            }
+
             const result = await response.json()
 
             if (response.ok) {
                 navigate('/host/create-session')
             } else {
-                setErrorMsg(`UPLOAD REJECTED: ${result.error || JSON.stringify(result)}`)
+                setErrorMsg(`${result.error || JSON.stringify(result)}`)
             }
         } catch (error) {
-            setErrorMsg("CRITICAL ERROR: Failed to establish contact with the server.")
+            setErrorMsg("Failed to establish contact with the server.")
         } finally {
             setIsSubmitting(false)
         }
+    }
+
+    if (isLoadingData) {
+
+        return (
+
+            <div className = "p-8 text-ink font-mono font-bold text-2xl uppercase animate-pulse">
+                Loading quiz architecture...
+            </div>
+
+        )
+
     }
 
     return (

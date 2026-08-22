@@ -1,41 +1,32 @@
 # urls.py
 
 
-"""
-URL configuration for core project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/6.0/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path, include
 
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from game.views import create_game_session, create_quiz, export_event_scores, list_host_quizzes, get_cloudinary_signature, verify_pin
+from game.views import (
+    create_game_session, create_quiz, delete_quiz, export_event_scores, list_host_quizzes, get_cloudinary_signature, get_quiz_detail, update_quiz, verify_pin
+)
 
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    path ('api/token/', TokenObtainPairView.as_view(), name = 'token_obtain_pair'),
+    path('api/token/', TokenObtainPairView.as_view(), name = 'token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name = 'token_refresh'),
 
     path('api/game/create/', create_game_session, name = 'create_session'),
-    path('api/create_quiz/', create_quiz, name = 'create-quiz'),
-    path('api/game/verify/<str:pin>', verify_pin, name = 'verify_pin'),
-    path('api/quizzes/', list_host_quizzes, name = 'list_quizzes'),
+    path('api/game/verify/<str:pin>/', verify_pin, name = 'verify_pin'),
+    
     path('api/media/signature/', get_cloudinary_signature, name = 'cloudinary_signature'),
+
+    path('api/quizzes/', list_host_quizzes, name = 'list_quizzes'),
+    path('api/quizzes/<int:quiz_id>/', get_quiz_detail, name = 'get_quiz_detail'),
+    path('api/quizzes/create/', create_quiz, name = 'create-quiz'),
+    path('api/quizzes/<int:quiz_id>/update/', update_quiz, name = 'update_quiz'),
+    path('api/quizzes/<int:quiz_id>/delete/', delete_quiz, name = 'delete_quiz'),
 
     path('api/export-scores/<str:event_name>/', export_event_scores, name = 'export_scores')
 ]

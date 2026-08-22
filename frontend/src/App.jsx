@@ -8,6 +8,7 @@ import HostLogin from './pages/HostLogin'
 import JoinScreen from './pages/JoinScreen'
 import NotFound from './pages/NotFound'
 import SessionCreator from './pages/SessionCreator'
+import TournamentLeaderboard from './pages/TournamentLeaderboard'
 
 import HostGameWrapper from './wrappers/HostGameWrapper'
 import HostProtectedRoute from './wrappers/HostProtectedRoute'
@@ -47,6 +48,15 @@ export default function App() {
                 />
 
                 <Route
+                    path = '/host/quiz/edit/:quizId'
+                    element = {
+                        <HostProtectedRoute>
+                            <CreateQuizPage/>
+                        </HostProtectedRoute>
+                    }
+                />
+
+                <Route
                     path = '/host/create-session'
                     element = {
                         <HostProtectedRoute>
@@ -60,6 +70,15 @@ export default function App() {
                     element = {
                         <HostProtectedRoute>
                             <HostGameWrapper />
+                        </HostProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path = '/host/tournament/:eventName'
+                    element = {
+                        <HostProtectedRoute>
+                            <TournamentLeaderboard />
                         </HostProtectedRoute>
                     }
                 />

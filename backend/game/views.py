@@ -41,10 +41,10 @@ def create_game_session(request):
         return Response({'error' : "event_name is strictly required for tournament sessions."}, status = 400)
     
     try:
-        quiz = Quiz.objects.get(id = quiz_id, author = request.user)
+        quiz = Quiz.objects.get(id = quiz_id, author = request.user, is_active = True)
     except ObjectDoesNotExist:
         
-        return Response({'error' : f"Quiz not found or unauthorized access."}, status = 404)
+        return Response({'error' : f"Quiz not found, deleted or unauthorized access."}, status = 404)
     
     # Check if the compiled payload exists & if it has Qs in it
     if not quiz.compiled_data or not quiz.compiled_data.get('questions'):
@@ -64,9 +64,24 @@ def create_game_session(request):
 def list_host_quizzes(request):
     """Allows the host to fetch a list of all available quizzes."""
 
-    quizzes = Quiz.objects.filter(author = request.user).values('id', 'title', 'is_published')
+    quizzes = Quiz.objects.filter(author = request.user, is_active = True).values('id', 'title', 'is_published')
 
     return Response(list(quizzes))
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def get_quiz_detail(request, quiz_id):
+    """Gets all the details of 1 specific quiz."""
+
+    try:
+        quiz = Quiz.objects.get(id = quiz_id, author = request.user, is_active = True)
+    except Quiz.DoesNotExist:
+
+        return Response({'error' : "Quiz not found."}, status = 404)
+
+    serializer = QuizSerializer(quiz)
+
+    return Response(serializer.data, status = 200)
 
 @api_view(['GET'])
 def verify_pin(request, pin):
@@ -112,7 +127,11 @@ def export_event_scores(request, event_name):
     results = PlayerResult.objects.filter(
         session__event_name = event_name,
         team_code__isnull = False
-    ).values('team_code').annotate(global_score = Sum('total_score')).order_by('-global_score')
+    ).values('team_code').annotate(
+        global_score = Sum('total_score'),
+        global_correct = Sum('correct_answers'),
+        global_time = Sum('total_time')
+    ).order_by('-global_score', '-global_correct', 'global_time', 'team_code') # Order 1st by total score, then no. of correct answers, lowest total time taken & then alphabetic fallback
 
     if not results:
 
@@ -132,3 +151,39 @@ def get_cloudinary_signature(request):
         'api_key' : os.environ.get('CLOUDINARY_API_KEY'),
         'cloud_name' : os.environ.get('CLOUDINARY_CLOUD_NAME')
     })
+
+@api_view(['DELETE'])
+@permission_classes([IsAdminUser])
+def delete_quiz(request, quiz_id):
+    try:
+        quiz = Quiz.objects.get(id = quiz_id)
+
+        if quiz.author != request.user:
+
+            return Response({'error' : "You do not have permission to delete this quiz."}, status = 403)
+
+        quiz.is_active = False
+        quiz.save(update_fields = ['is_active'])
+
+        return Response({'message' : "Quiz deleted."}, status = 200)
+    except Quiz.DoesNotExist:
+
+        return Response({'error' : "Quiz not found"}, status = 404)
+
+@api_view(['PUT'])
+@permission_classes([IsAdminUser])
+def update_quiz(request, quiz_id):
+    try:
+        quiz = Quiz.objects.get(id = quiz_id, author = request.user, is_active = True)
+    except Quiz.DoesNotExist:
+
+        return Response({'error' : "Quiz not found or you don't have permission."}, status = 404)
+
+    serializer = QuizSerializer(quiz, data = request.data, context = {'request' : request})
+
+    if serializer.is_valid():
+        updated_quiz = serializer.save()
+
+        return Response({'message' : "Quiz updated successfully.", 'quiz_id' : updated_quiz.id}, status = 200)
+
+    return Response({'error' : serializer.errors}, status = 400)

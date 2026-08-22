@@ -32,4 +32,12 @@ export const createGameSession = (quizId, eventName) => apiCall('/game/create/',
 
 export const getHostQuizzes = () => apiCall('/quizzes/', {method : 'GET'})
 
-export const verifyPin = (pin) => apiCall(`/verify_pin/${pin}`, {method : 'GET'})
+export const verifyPin = (pin) => apiCall(`/game/verify/${pin}`, {method : 'GET'})
+
+export const deleteHostQuiz = (quizId) => apiCall(`/quizzes/${quizId}/delete/`, {method : 'DELETE'})
+
+export const updateHostQuiz = (quizId, data) => apiCall(`/quizzes/${quizId}/update/`, {method : 'PUT', body : JSON.stringify(data)})
+
+export const getHostQuizDetail = (quizId) => apiCall(`/quizzes/${quizId}/`, {method : 'GET'})
+
+export const getTournamentLeaderboard = (eventName) => apiCall(`/export-scores/${eventName}/`, {method : 'GET'})

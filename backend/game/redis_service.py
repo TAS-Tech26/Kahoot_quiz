@@ -19,6 +19,8 @@ class GameRedisManager:
         self.active_key = f'game:{self.pin}:active_players'
         self.scores_key = f'game:{self.pin}:scores'
         self.quiz_key = f'game:{self.pin}:quiz'
+        self.correct_key = f'game:{self.pin}:correct_counts'
+        self.time_key = f'game:{self.pin}:total_time'
 
     async def get_state(self):
 
@@ -76,6 +78,22 @@ class GameRedisManager:
 
     async def increment_player_score(self, team_code, points):
         await redis_client.zincrby(self.scores_key, points, team_code)
+
+    async def increment_correct_answers(self, team_code):
+        await redis_client.hincrby(self.correct_key, team_code, 1)
+
+    async def add_player_time(self, team_code, time_taken):
+        await redis_client.hincrbyfloat(self.time_key, team_code, time_taken)
+
+    async def get_player_time(self, team_code):
+        val = await redis_client.hget(self.time_key, team_code)
+
+        return float(val) if val else 0.0
+
+    async def get_correct_answers(self, team_code):
+        count = await redis_client.hget(self.correct_key, team_code)
+
+        return int(count) if count else 0
 
     async def get_final_scores(self):
 

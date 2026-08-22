@@ -12,6 +12,7 @@ class Quiz(models.Model):
     is_published = models.BooleanField(default = False)
     compiled_data = JSONField(null = True, blank = True) # Stores the entire quiz (Qs & choices) in a single block.
     created_at = models.DateTimeField(auto_now_add = True)
+    is_active = models.BooleanField(default = True)
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete = models.CASCADE, limit_choices_to = {'is_staff' : True})
 
@@ -87,6 +88,8 @@ class PlayerResult(models.Model):
 
     name = models.CharField(max_length = 255)
     total_score = models.IntegerField(default = 0)
+    correct_answers = models.IntegerField(default = 0)
+    total_time = models.FloatField(default = 0.0)
     team_code = models.CharField(max_length = 10, db_index = True)
     
     session = models.ForeignKey(GameSession, on_delete = models.CASCADE)
