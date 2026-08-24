@@ -90,6 +90,29 @@ export default function GameRoom() {
                     currentPlayerId = {currentTeamPin}
                 />
             )}
+
+            {gameState === 'error' && (
+                <div className = "flex-1 flex flex-col items-center justify-center w-full max-w-2xl mx-auto">
+                    <div className = "bg-btn-wrong text-ink border-4 border-ink shadow-brutal-lg p-12 text-center w-full">
+                        <h2 className = "text-4xl font-bold uppercase mb-4 tracking-tighter">
+                            Access Denied
+                        </h2>
+
+                        <div className = "bg-bg-base border-4 border-ink p-6 shadow-brutal-sm inline-block">
+                            <p className = "font-mono text-xl font-bold uppercase">
+                                {answerResult?.message || "Invalid team credentials."}
+                            </p>
+                        </div>
+
+                        <button
+                            onClick = {() => navigate('/', {replace : true})}
+                            className = "mt-8 w-full bg-ink text-text-inverted px-6 py-4 font-bold text-2xl uppercase border-4 border-ink shadow-brutal-md hover:-translate-y-1 transition-all"
+                        >
+                            Return to Login
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
 
     )

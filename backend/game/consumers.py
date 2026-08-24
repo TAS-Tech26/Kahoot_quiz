@@ -2,8 +2,12 @@
 
 
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
+from django.conf import settings
+from urllib.parse import parse_qs
 
 from .handlers import GameSessionHandler
+
+import jwt
 
 
 class GameConsumer(AsyncJsonWebsocketConsumer):
@@ -13,6 +17,22 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         self.room_group_name = f'game_{self.pin}'
         self.handler = GameSessionHandler(self)
 
+        self.is_verified_host = False
+
+        query_string = self.scope.get('query_string', b'').decode()
+        query_params = parse_qs(query_string)
+
+        if 'token' in query_params:
+            token = query_params['token'][0]
+
+            try:
+                payload = jwt.decode(token, settings.HUB_SECRET_KEY, algorithms = ['HS256'])
+
+                if payload.get('role') == 'host':
+                    self.is_verified_host = True
+            except jwt.PyJWTError:
+                pass # Invalid/expired token. They're a normal player.
+        
         if not await self.handler.verify_session():
             await self.close(code = 4004) # Drop connection instantly
 
@@ -32,8 +52,15 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
     async def receive_json(self, content):
         action = content.get('action')
-        is_host = content.get('role') == 'host'
         data = content.get('data', {})
+
+        claimed_host = content.get('role') == 'host'
+        is_host = claimed_host and self.is_verified_host
+
+        if claimed_host and not self.is_verified_host:
+            await self.send_json({'event_type' : 'error', 'message' : "Unauthorized host action intercepted."})
+
+            return
 
         if action == 'host_start' and is_host:
             await self.handler.handle_host_start()

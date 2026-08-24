@@ -99,6 +99,9 @@ class GameRedisManager:
 
         return await redis_client.zrevrange(self.scores_key, 0, -1, withscores = True) # zrevrange returns tuples of (member, score) where score is float.
 
+    async def set_leaderboard_state(self):
+        await redis_client.hset(self.state_key, mapping = {'status' : 'leaderboard'})
+
     async def cleanup_game_data(self):
         cursor = b'0'
 

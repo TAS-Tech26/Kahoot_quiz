@@ -2,6 +2,7 @@
 
 
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import Choice, GameSession, PlayerResult, Question, Quiz
 
@@ -50,12 +51,26 @@ class QuestionAdmin(admin.ModelAdmin):
 @admin.register(GameSession)
 class GameSessionAdmin(admin.ModelAdmin):
 
-    list_display = ('pin', 'quiz', 'event_name', 'started_at', 'ended_at')
+    list_display = ('pin', 'quiz', 'event_name', 'started_at', 'ended_at', 'is_active')
     list_filter = ('started_at', 'event_name')
 
     search_fields = ('pin', 'event_name')
 
     inlines = [PlayerResultInline] # Clicking on a session lets you see the entire leaderboard
+
+    actions = ['force_end_sessions']
+
+    def is_active(self, obj):
+
+        return obj.ended_at is None
+
+    is_active.boolean = True
+
+    @admin.action(description = "Force-close selected abandoned sessions")
+    def force_end_sessions(self, request, queryset):
+        updated = queryset.filter(ended_at__isnull = True).update(ended_at = timezone.now())
+
+        self.message_user(request, f"Successfully closed {updated} abandoned session(s).")
 
 
 @admin.register(PlayerResult)

@@ -67,6 +67,8 @@ class GameSessionHandler:
         if not team_pin:
             await self.consumer.send_json({'event' : 'error', 'data' : {'message' : "Team PIN is required."}})
 
+            return
+
         existing_name = await self.redis.get_player_name(team_pin)
 
         if existing_name:
@@ -169,7 +171,9 @@ class GameSessionHandler:
         )
 
     async def handle_show_leaderboard(self):
-        top_5, player_ranks, _ = await self._get_current_leaderboard()
+        top_5, player_ranks, _, _, _ = await self._get_current_leaderboard()
+
+        await self.redis.set_leaderboard_state()
 
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
@@ -184,6 +188,11 @@ class GameSessionHandler:
             return
 
         status = state.get('status')
+
+        if status == 'leaderboard':
+            await self.handle_show_leaderboard()
+
+            return
 
         quiz_data = await self.redis.get_quiz_data()
 
@@ -391,10 +400,26 @@ class GameSessionHandler:
             results_payload.append({'team_code' : team_code, 'rank' : rank, 'assets' : assets_str})
 
         async with httpx.AsyncClient() as client:
-            try:
-                await client.post(f'{hub_url}/api/webhooks/ingest/{event_name}/', json = {'results' : results_payload}, headers = {'X-Hub-Secret' : hub_secret})
-            except httpx.RequestError as e:
-                print("Failed to push results to orchestrator: {e}")
+            for attempt in range(3): # 3 retry attempts
+                try:
+                    response = await client.post(
+                        f'{hub_url}/api/webhooks/ingest/{event_name}/',
+                        json = {'results' : results_payload},
+                        headers = {'X-Hub-Secret' : hub_secret},
+                        timeout = 10
+                    )
+
+                    if response.status_code == 200:
+
+                        return
+
+                    print(f"Hub rejected payload with status {response.status_code}. Retrying...")
+                except httpx.RequestError as e:
+                    print(f"Attempt {attempt + 1}: Failed to push results to orchestrator: {e}")
+
+                await asyncio.sleep(2 ** attempt)
+
+            print(f"Failed to push final results to Hub for room {self.pin} after 3 attempts")
 
     # --- DB Readers/Writers
     @database_sync_to_async

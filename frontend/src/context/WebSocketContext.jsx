@@ -1,7 +1,7 @@
 // WebSocketContext.jsx
 
 
-import {createContext, useContext, useEffect, useRef, useState} from 'react'
+import {act, createContext, useContext, useEffect, useRef, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router-dom'
 
 
@@ -17,6 +17,8 @@ export const WebSocketProvider = ({pin, role, children}) => {
 
     const navigate = useNavigate()
     const location = useLocation() // Read the data passed from JoinScreen
+
+    const registrationStateRef = useRef(location.state)
 
     useEffect(() => {
         if (!pin) return
@@ -47,15 +49,15 @@ export const WebSocketProvider = ({pin, role, children}) => {
 
             if (role === 'player') {
                 const savedTeamPin = localStorage.getItem(`team_pin_${pin}`)
-                const registrationData = location.state // Fetched from router
+                const registrationData = registrationStateRef.current // Fetched from router
                 
                 const activeTeamPin = registrationData?.team_pin || savedTeamPin
 
                 if (activeTeamPin) {
+                    localStorage.setItem(`team_pin_${pin}`, activeTeamPin)
+
                     // Recover player ID if disconnected
                     ws.send(JSON.stringify({action : 'player_join', role : 'player', data : {team_pin : activeTeamPin}}))
-
-                    if (registrationData) window.history.replaceState({}, document.title)
                 } else {
                     console.error("Connection rejected: No player registration data found.")
 
@@ -69,18 +71,26 @@ export const WebSocketProvider = ({pin, role, children}) => {
         }
 
         ws.onmessage = (event) => {
-            const parsedData = JSON.parse(event.data)
+            try {
+                const parsedData = JSON.parse(event.data)
 
-            setLastMessage(parsedData)
+                setLastMessage(parsedData)
 
-            // Auto-save player_id to localStorage when backend sends 1
-            if (['join_success', 'rejoin_success'].includes(parsedData.event)) localStorage.setItem(`team_pin_${pin}`, parsedData.data.team_pin)
+                // Auto-save player_id to localStorage when backend sends 1
+                if (['join_success', 'rejoin_success'].includes(parsedData.event)) localStorage.setItem(`team_pin_${pin}`, parsedData.data.team_pin)
+            } catch (err) {
+                console.error("Failed to parse incoming WS message : ", err)
+            }
         }
 
         ws.onclose = () => setIsConnected(false)
 
-        return () => ws.close()
-    }, [pin, navigate, role, location.state])
+        return () => {
+
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close()
+                
+        }
+    }, [pin, navigate, role])
 
     const sendMessage = (action, role, data = {}) => {
         if (socketRef.current?.readyState === WebSocket.OPEN) socketRef.current.send(JSON.stringify({action, role, data}))

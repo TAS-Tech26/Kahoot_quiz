@@ -111,10 +111,13 @@ def export_event_scores(request, event_name):
     # Secure authentication
     provided_key = request.headers.get('X-Kahoot-API-Key', '')
     expected_key = getattr(settings, 'KAHOOT_SECRET_KEY', '')
+    is_valid_server = expected_key and hmac.compare_digest(provided_key, expected_key) 
 
-    if not expected_key or not hmac.compare_digest(provided_key, expected_key):
+    is_valid_host = request.user and request.user.is_authenticated and request.user.is_staff
 
-        return Response({'error' : "Unauthorized server access."}, status = 403)
+    if not (is_valid_server or is_valid_host):
+
+        return Response({'error' : "Unauthorized access. Invalid API key or expired host session."}, status = 403)
 
     # Don't export if the tournament phase is still active
     active_rooms = GameSession.objects.filter(event_name = event_name, ended_at__isnull = True)

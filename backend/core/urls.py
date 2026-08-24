@@ -4,8 +4,6 @@
 from django.contrib import admin
 from django.urls import path, include
 
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-
 from game.views import (
     create_game_session, create_quiz, delete_quiz, export_event_scores, list_host_quizzes, get_cloudinary_signature, get_quiz_detail, update_quiz, verify_pin
 )
@@ -13,9 +11,6 @@ from game.views import (
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
-    path('api/token/', TokenObtainPairView.as_view(), name = 'token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name = 'token_refresh'),
 
     path('api/game/create/', create_game_session, name = 'create_session'),
     path('api/game/verify/<str:pin>/', verify_pin, name = 'verify_pin'),

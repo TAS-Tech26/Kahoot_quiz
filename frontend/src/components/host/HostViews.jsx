@@ -64,7 +64,7 @@ export const HostStaging = ({question, onStartTimer}) => (
                     )}
                 </div>
             )}
-        </div>W
+        </div>
 
         <button
             onClick = {onStartTimer}
