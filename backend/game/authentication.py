@@ -27,7 +27,11 @@ class HubJWTAuthentication(authentication.BaseAuthentication):
             payload = jwt.decode(token, settings.HUB_SECRET_KEY, algorithms = ['HS256'])
 
             if payload.get('role') == 'host':
-                user, _ = User.objects.get_or_create(username = payload['username'], defaults = {'is_staff' : True})
+                user, _ = User.objects.get_or_create(username = payload['username'])
+
+                if not user.is_staff:
+                    user.is_staff = True
+                    user.save(update_fields = ['is_staff'])
                 
                 return (user, token)
             elif 'team_code' in payload and 'event_name' in payload:

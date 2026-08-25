@@ -6,9 +6,9 @@ import {Navigate} from 'react-router-dom'
 
 export default function HostProtectedRoute({children}) {
     
-    const token = localStorage.getItem('access_token')
+    const token = localStorage.getItem('token')
 
-    if (!token) {
+    if (!token || token === 'undefined' || token === 'null') {
 
         return (
 

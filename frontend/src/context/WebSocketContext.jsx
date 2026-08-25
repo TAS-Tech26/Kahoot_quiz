@@ -23,11 +23,11 @@ export const WebSocketProvider = ({pin, role, children}) => {
     useEffect(() => {
         if (!pin) return
 
-        const wsBase = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000/ws'
+        const wsBase = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8001/ws'
         let wsUrl = `${wsBase}/game/${pin}/`
 
         if (role === 'host') {
-            const token = localStorage.getItem('access_token')
+            const token = localStorage.getItem('token')
 
             if (!token) {
                 console.error("Host connection failed: Missing authentication token.")

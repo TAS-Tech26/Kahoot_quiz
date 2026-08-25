@@ -113,7 +113,7 @@ export default function SessionCreator() {
                 )}
                 
                 <div className = "mb-8 bg-card-dark p-6 border-4 border-ink shadow-brutal-sm flex justify-between items-end gap-6 flex-wrap">
-                    <div className = "flex-1 min-w-[300px]">
+                    <div className = "flex-1 min-w-75">
                         <label className = "block text-text-inverted font-mono font-bold text-xl uppercase mb-4">
                             Event Name
                         </label>
