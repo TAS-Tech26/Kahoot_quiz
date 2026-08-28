@@ -24,7 +24,7 @@ class Quiz(models.Model):
 
         payload = {'quiz_id' : self.id, 'title' : self.title, 'questions' : []}
 
-        for q in self.questions.all().order_by('order'):
+        for q in self.questions.all().prefetch_related('choices').order_by('order'):
             payload['questions'].append({
                 'id' : q.id,
                 'text' : q.text,

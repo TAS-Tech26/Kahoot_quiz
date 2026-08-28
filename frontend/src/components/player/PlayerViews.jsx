@@ -118,10 +118,7 @@ export const PlayerResult = ({result}) => {
 
 }
 
-export const PlayerGameOver = ({leaderboard, currentTeamPin}) => {
-
-    const playerRankIndex = leaderboard?.findIndex(p => p.team_pin === currentTeamPin)
-    const playerRank = playerRankIndex !== -1 ? playerRankIndex + 1 : 'N/A'
+export const PlayerGameOver = ({myRank}) => {
 
     return (
 
@@ -137,11 +134,11 @@ export const PlayerGameOver = ({leaderboard, currentTeamPin}) => {
                     </p>
 
                     <p className = "text-6xl font-bold text-ink">
-                        #{playerRank}
+                        #{myRank || 'N/A'}
                     </p>
                 </div>
 
-                <p className = "font-mono text-ink/70 font-bold uppercase tracking-widest text-center">
+                <p className = "font-mono text-text-inverted/70 font-bold uppercase tracking-widest text-center mt-8">
                     Look at the host screen for the podium.
                 </p>
             </div>

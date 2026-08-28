@@ -54,10 +54,15 @@ def create_game_session(request):
 
             return Response({'error' : "Cannot start a game. The quiz contains zero questions."}, status = 400)
     
-    pin = generate_unique_pin()
-    session = GameSession.objects.create(quiz = quiz, pin = pin, event_name = event_name)
-
-    return Response({'message' : "Session created successfully.", 'pin' : session.pin, 'quiz_id' : quiz.id, 'event_name' : session.event_name}, status = 201)
+    from django.db import IntegrityError
+    for _ in range(5):
+        pin = generate_unique_pin()
+        try:
+            session = GameSession.objects.create(quiz = quiz, pin = pin, event_name = event_name)
+            return Response({'message' : "Session created successfully.", 'pin' : session.pin, 'quiz_id' : quiz.id, 'event_name' : session.event_name}, status = 201)
+        except IntegrityError:
+            continue
+    return Response({'error' : "Failed to generate unique PIN. Try again."}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAdminUser])
@@ -74,7 +79,7 @@ def get_quiz_detail(request, quiz_id):
     """Gets all the details of 1 specific quiz."""
 
     try:
-        quiz = Quiz.objects.get(id = quiz_id, author = request.user, is_active = True)
+        quiz = Quiz.objects.prefetch_related('questions__choices').get(id = quiz_id, author = request.user, is_active = True)
     except Quiz.DoesNotExist:
 
         return Response({'error' : "Quiz not found."}, status = 404)
@@ -86,8 +91,7 @@ def get_quiz_detail(request, quiz_id):
 @api_view(['GET'])
 def verify_pin(request, pin):
     try:
-        session = GameSession.objects.get(pin = pin)
-
+        session = GameSession.objects.get(pin=pin, ended_at__isnull=True)
         return Response({'valid' : True, 'event_name' : session.event_name})
     except GameSession.DoesNotExist:
 

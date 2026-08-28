@@ -41,13 +41,16 @@ class GameRedisManager:
     async def register_new_player(self, team_code, name):
         await redis_client.hset(self.players_key, team_code, name)
         await redis_client.zadd(self.scores_key, {team_code : 0}, nx = True)
-        await redis_client.sadd(self.active_key, team_code)
+        await redis_client.hincrby(self.active_key, team_code, 1)
 
     async def add_active_player(self, team_code):
-        await redis_client.sadd(self.active_key, team_code)
+        await redis_client.hincrby(self.active_key, team_code, 1)
 
     async def remove_active_player(self, team_code):
-        await redis_client.srem(self.active_key, team_code)
+        count = await redis_client.hincrby(self.active_key, team_code, -1)
+        
+        if count <= 0:
+            await redis_client.hdel(self.active_key, team_code)
 
     async def stage_question_state(self, question_index, question_id):
         await redis_client.hset(self.state_key, mapping = {'status' : 'staging', 'current_question_index' : question_index, 'current_question_id' : question_id})
@@ -60,7 +63,7 @@ class GameRedisManager:
 
     async def get_active_players_count(self):
 
-        return await redis_client.scard(self.active_key)
+        return await redis_client.hlen(self.active_key)
 
     async def get_player_name(self, team_code):
 
@@ -70,6 +73,11 @@ class GameRedisManager:
         answered_key = f'game:{self.pin}:answered:{question_id}' # Dynamic key for each Q
 
         return await redis_client.sadd(answered_key, team_code)
+
+    async def has_player_answered(self, question_id, team_code):
+        answered_key = f'game:{self.pin}:answered:{question_id}'
+        return await redis_client.sismember(answered_key, team_code)
+
 
     async def get_answered_count(self, question_id):
         answered_key = f'game:{self.pin}:answered:{question_id}'
@@ -103,12 +111,14 @@ class GameRedisManager:
         await redis_client.hset(self.state_key, mapping = {'status' : 'leaderboard'})
 
     async def cleanup_game_data(self):
-        cursor = b'0'
+        cursor = 0
 
         match_pattern = f'game:{self.pin}:*'
 
-        while cursor:
+        while True:
             cursor, keys = await redis_client.scan(cursor = cursor, match = match_pattern, count = 100)
 
             if keys:
                 await redis_client.delete(*keys)
+            if cursor == 0 or cursor == '0':
+                break

@@ -1,7 +1,7 @@
 // GameRoom.jsx
 
 
-import {useEffect} from 'react'
+import {useEffect, useRef} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 
 import {useWebSocket} from '../context/WebSocketContext'
@@ -14,8 +14,10 @@ import {PlayerActiveQuestion, PlayerLeaderboard, PlayerLobby, PlayerLocked, Play
 export default function GameRoom() {
 
     const {pin} = useParams()
-    const {lastMessage, isConnected, sendMessage} = useWebSocket()
+    const {lastMessage, isConnected, isReconnecting, sendMessage} = useWebSocket()
     const {gameState, setGameState, playersCount, currentQuestion, answerResult, leaderboard, playerRanks} = useGameState(lastMessage, 1)
+    
+    const isSubmittingRef = useRef(false)
 
     const navigate = useNavigate()
 
@@ -29,11 +31,16 @@ export default function GameRoom() {
 
             navigate('/', {replace : true})
         }
+        
+        if (gameState !== 'locked') {
+            isSubmittingRef.current = false
+        }
     }, [gameState, answerResult, navigate, pin])
 
     const handleAnswerSubmit = (choiceId) => {
-        if (gameState !== 'active') return
+        if (gameState !== 'active' || isSubmittingRef.current) return
 
+        isSubmittingRef.current = true
         setGameState('locked') // Locally freeze the UI while waiting for the server to respond
         sendMessage('submit_answer', 'player', {choice_id : choiceId})
     }
@@ -48,7 +55,7 @@ export default function GameRoom() {
 
             <div className = "min-h-screen flex items-center justify-center p-8 bg-bg-base">
                 <div className = "bg-card-dark text-text-inverted border-4 border-ink p-8 shadow-brutal-lg font-mono text-2xl font-bold uppercase animate-pulse">
-                    Connecting to game...
+                    {isReconnecting ? "Reconnecting to game..." : "Connecting to game..."}
                 </div>
             </div>
 
@@ -86,8 +93,7 @@ export default function GameRoom() {
 
             {gameState === 'game_over' && (
                 <PlayerGameOver
-                    leaderboard = {leaderboard}
-                    currentPlayerId = {currentTeamPin}
+                    myRank = {myRank}
                 />
             )}
 

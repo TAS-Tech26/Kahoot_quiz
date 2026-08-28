@@ -89,7 +89,7 @@ class GameSessionHandler:
             return
 
         hub_url = os.environ.get('HUB_SERVICE_URL', 'http://127.0.0.1:8000')
-        hub_secret = os.environ.get('HUB_SECRET_KEY')
+        hub_secret = getattr(settings, 'HUB_SECRET_KEY', '')
 
         async with httpx.AsyncClient() as client:
             try:
@@ -113,7 +113,9 @@ class GameSessionHandler:
 
         asyncio.create_task(self._create_player_result(team_pin, full_name))
 
-        await self.consumer.send_json({'event' : 'join_success', 'data' : {'team_pin' : team_pin}})
+        sync_payload = await self._build_rejoin_payload(team_pin, full_name)
+        await self.consumer.send_json(sync_payload)
+        
         await self.consumer.channel_layer.group_send(
             self.consumer.room_group_name,
             {'type' : 'broadcast_event', 'event_type' : 'player_joined', 'data' : {'name' : full_name, 'total_players' : total_players}}
@@ -155,12 +157,14 @@ class GameSessionHandler:
 
         points_earned = 0
 
-        if is_correct and time_taken <= time_limit:
-            points_earned = round((1 - (time_taken / (time_limit * 2))) * 1000)
+        # Allow a 2-second grace period for network latency
+        if is_correct and time_taken <= (time_limit + 2.0):
+            effective_time = min(time_taken, time_limit)
+            points_earned = round((1 - (effective_time / (time_limit * 2))) * 1000)
 
             await self.redis.increment_player_score(self.consumer.identity, points_earned)
             await self.redis.increment_correct_answers(self.consumer.identity)
-            await self.redis.add_player_time(self.consumer.identity, time_taken)
+            await self.redis.add_player_time(self.consumer.identity, effective_time)
 
         total_answers = await self.redis.get_answered_count(question_id)
 
@@ -324,17 +328,22 @@ class GameSessionHandler:
                         'media_type' : current_q.get('media_type')
                     }
                 elif status == 'active':
-                    start_time = float(state.get('start_time', time.time()))
-                    elapsed = time.time() - start_time
-                    remaining = max(0, float(current_q['time_limit']) - elapsed)
+                    has_answered = await self.redis.has_player_answered(current_q['id'], team_code)
 
-                    data_block['active_question'] = {
-                        'status' : 'active',
-                        'question_id' : current_q['id'],
-                        'text' : current_q['text'],
-                        'time_limit' : remaining,
-                        'choices' : [{'id' : c['id'], 'text' : c['text']} for c in current_q['choices']]
-                    }
+                    if has_answered:
+                        data_block['active_question'] = {'status' : 'locked', 'question_id' : current_q['id']}
+                    else:
+                        start_time = float(state.get('start_time', time.time()))
+                        elapsed = time.time() - start_time
+                        remaining = max(0, float(current_q['time_limit']) - elapsed)
+
+                        data_block['active_question'] = {
+                            'status' : 'active',
+                            'question_id' : current_q['id'],
+                            'text' : current_q['text'],
+                            'time_limit' : remaining,
+                            'choices' : [{'id' : c['id'], 'text' : c['text']} for c in current_q['choices']]
+                        }
 
         return {'event' : 'rejoin_success', 'data' : data_block}
     
@@ -386,7 +395,7 @@ class GameSessionHandler:
         event_name = self.session_record.event_name
 
         hub_url = os.environ.get('HUB_SERVICE_URL', 'http://127.0.0.1:8000')
-        hub_secret = os.environ.get('HUB_SECRET_KEY')
+        hub_secret = getattr(settings, 'HUB_SECRET_KEY', '')
 
         results_payload = []
 
@@ -426,7 +435,7 @@ class GameSessionHandler:
     def _get_game_session(self, pin):
         try:
 
-            return GameSession.objects.select_related('quiz').get(pin = pin)
+            return GameSession.objects.select_related('quiz').get(pin = pin, ended_at__isnull = True)
         
         except GameSession.DoesNotExist:
 
@@ -439,10 +448,10 @@ class GameSessionHandler:
 
     @database_sync_to_async
     def _create_player_result(self, team_code, name):
-        PlayerResult.objects.create(
+        PlayerResult.objects.get_or_create(
             session_id = self.session_record.id,
             team_code = team_code,
-            name = name
+            defaults = {'name' : name}
         )
 
     @database_sync_to_async

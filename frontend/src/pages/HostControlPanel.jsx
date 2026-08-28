@@ -1,6 +1,7 @@
 // HostControlPanel.jsx
 
 
+import {useRef, useEffect} from 'react'
 import {useWebSocket} from '../context/WebSocketContext'
 
 import {useGameState} from '../hooks/useGameState'
@@ -10,9 +11,21 @@ import {HostActiveQuestion, HostLobby, HostPodium, HostResult, HostStaging} from
 
 export default function HostControlPanel() {
 
-    const {lastMessage, isConnected, sendMessage} = useWebSocket()
+    const {lastMessage, isConnected, isReconnecting, sendMessage} = useWebSocket()
 
     const {gameState, playersCount, currentQuestion, answersSubmitted, leaderboard} = useGameState(lastMessage, 0)
+    
+    const isSubmittingRef = useRef(false)
+    
+    useEffect(() => {
+        isSubmittingRef.current = false
+    }, [gameState])
+
+    const handleAction = (actionName) => {
+        if (isSubmittingRef.current) return
+        isSubmittingRef.current = true
+        sendMessage(actionName, 'host', {})
+    }
 
     if (!isConnected) {
 
@@ -20,7 +33,7 @@ export default function HostControlPanel() {
 
             <div className = "min-h-screen flex items-center justify-center p-8 bg-bg-base">
                 <div className = "bg-card-dark text-text-inverted border-4 border-ink p-8 shadow-brutal-lg font-mono text-2xl font-bold uppercase animate-pulse">
-                    Connecting to Lobby...
+                    {isReconnecting ? "Reconnecting to Lobby..." : "Connecting to Lobby..."}
                 </div>
             </div>
 
@@ -34,14 +47,14 @@ export default function HostControlPanel() {
             {gameState === 'lobby' && (
                 <HostLobby
                     playersCount = {playersCount}
-                    onStart = {() => sendMessage('host_start', 'host', {})}
+                    onStart = {() => handleAction('host_start')}
                 />
             )}
 
             {gameState === 'staging' && currentQuestion && (
                 <HostStaging
                     question = {currentQuestion}
-                    onStartTimer = {() => sendMessage('host_start_timer', 'host', {})}
+                    onStartTimer = {() => handleAction('host_start_timer')}
                 />
             )}
 
@@ -50,14 +63,14 @@ export default function HostControlPanel() {
                     question = {currentQuestion}
                     answersSubmitted = {answersSubmitted}
                     totalPlayers = {playersCount}
-                    onShowLeaderboard = {() => sendMessage('host_show_leaderboard', 'host', {})}
+                    onShowLeaderboard = {() => handleAction('host_show_leaderboard')}
                 />
             )}
 
             {gameState === 'leaderboard' && (
                 <HostResult
                     leaderboard = {leaderboard}
-                    onNext = {() => sendMessage('host_next_question', 'host', {})}
+                    onNext = {() => handleAction('host_next_question')}
                 />
             )}
 

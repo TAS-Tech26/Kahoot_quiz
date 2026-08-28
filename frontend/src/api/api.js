@@ -12,17 +12,22 @@ export const apiCall = async (endpoint, options = {}) => {
 
     if (token) headers['Authorization'] = `Bearer ${token}`
 
-    const response = await fetch(`${BASE_URL}${endpoint}`, {...options, headers})
+    try {
+        const response = await fetch(`${BASE_URL}${endpoint}`, {...options, headers})
 
-    if (response.status === 401) {
-        console.error("Session expired. Please log in again.")
+        if (response.status === 401) {
+            console.error("Session expired. Please log in again.")
 
-        localStorage.removeItem('access_token')
+            localStorage.removeItem('token')
 
-        window.location.href = '/host/login'
+            window.location.href = '/host/login'
+        }
+
+        return response
+    } catch (error) {
+        console.error("Network or API Call Error:", error)
+        throw error
     }
-
-    return response
  
 }
 

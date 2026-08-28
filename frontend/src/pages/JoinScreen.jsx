@@ -44,6 +44,9 @@ export default function JoinScreen() {
         e.preventDefault()
 
         if (!teamPin.trim()) return setErrorMsg("Team PIN is required.")
+        if (isLoading) return
+        
+        setIsLoading(true)
 
         navigate(`/game/${pin}`, {state : {team_pin : teamPin.trim()}})
     }
@@ -104,9 +107,10 @@ export default function JoinScreen() {
 
                         <button
                             type = 'submit'
-                            className = "w-full bg-btn-correct text-ink font-bold text-2xl py-4 border-4 border-ink shadow-brutal-md hover:-translate-y-1 hover:shadow-brutal-lg active:translate-y-1.5 active:translate-x-1.5 active:shadow-none transition-all uppercase"
+                            disabled = {isLoading}
+                            className = "w-full bg-btn-correct text-ink font-bold text-2xl py-4 border-4 border-ink shadow-brutal-md hover:-translate-y-1 hover:shadow-brutal-lg active:translate-y-1.5 active:translate-x-1.5 active:shadow-none transition-all uppercase disabled:opacity-50"
                         >
-                            Log In
+                            {isLoading ? 'Logging In...' : 'Log In'}
                         </button>
                     </form>
                 )}
